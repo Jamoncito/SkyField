@@ -29,6 +29,9 @@ En un shell POSIX puedes copiar `.env.example` a `.env`, generar la contraseña 
 
 Para trabajar en React con recarga, ejecuta `npm --prefix web ci` y `npm --prefix web run dev` con la API en el puerto 8080. Incluye `http://127.0.0.1:5173` en `APP_ORIGINS` de la API. Para probar GPS en un teléfono, conecta un proxy inverso HTTPS de tu red local al puerto 8080 de la computadora, instala en el teléfono la CA de confianza correspondiente y usa `docker compose -f compose.yaml -f compose.lan.yaml up --build` con `LAN_ORIGIN` apuntando al origen HTTPS del proxy. Mantén el puerto de base y los archivos en el entorno local. El perfil HTTPS debe verificarse en cada instalación.
 
+## Visual Studio Code
+
+La carpeta incluye tareas para iniciar, detener y verificar la aplicación. Usa **Terminal → Ejecutar tarea** y elige una tarea de Júpiter Jr. **Ctrl+Shift+B** ejecuta la compilación web, las pruebas Python, la aceptación de escritorio y móvil, y la recuperación de informes tras reiniciar. Las tareas aplican la política de ejecución únicamente al proceso de PowerShell que lanzan.
 ## Datos
 
 - El CSV original de NASA POWER está en `data/reference`. SHA-256 `a857c75725241b54619b2552f86ec488627b222cafd3f70b33a791115c3f306d`. Su serie diaria UTC cubre 2015–2025, con 4.018 observaciones completas, 1.174,83 mm/año en promedio y 26,13 °C de temperatura media. El histórico solo se reutiliza para el punto validado. Un punto distinto consulta su propia serie. [NASA POWER](https://power.larc.nasa.gov/docs/tutorials/service-data-request/api/)

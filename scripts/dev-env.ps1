@@ -1,4 +1,8 @@
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
+$NodeDirectory = Join-Path $env:ProgramFiles 'nodejs'
+if (Test-Path -LiteralPath (Join-Path $NodeDirectory 'node.exe')) {
+    $env:PATH = "$NodeDirectory;$env:PATH"
+}
 $env:DATABASE_URL = 'postgresql+psycopg://postgres@127.0.0.1:55433/postgres?sslmode=disable'
 $env:PSYCOPG_IMPL = 'python'
 $env:PATH = "$ProjectRoot/.local/pgsql/bin;$env:PATH"
