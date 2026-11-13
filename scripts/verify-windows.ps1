@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([switch]$Recovery)
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/dev-env.ps1"

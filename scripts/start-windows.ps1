@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param([switch]$Rebuild)
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/dev-env.ps1"

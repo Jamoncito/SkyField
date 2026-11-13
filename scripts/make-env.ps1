@@ -1,4 +1,4 @@
-$ErrorActionPreference='Stop'
+﻿$ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 $target=Join-Path $root '.env'
 if(Test-Path -LiteralPath $target){throw 'Ya existe .env. Conserva la contraseña que usa tu volumen.'}

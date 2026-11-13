@@ -1,4 +1,4 @@
-$root=Split-Path -Parent $PSScriptRoot
+﻿$root=Split-Path -Parent $PSScriptRoot
 $patterns=@{api='jupiter\.api:app';worker='jupiter\.worker';pglite='db\.mjs'}
 foreach($name in @('worker','api','pglite')){
     $pidFile="$root/.local/$name.pid"

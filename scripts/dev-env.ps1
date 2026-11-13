@@ -1,4 +1,4 @@
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
+﻿$ProjectRoot = Split-Path -Parent $PSScriptRoot
 $NodeDirectory = Join-Path $env:ProgramFiles 'nodejs'
 if (Test-Path -LiteralPath (Join-Path $NodeDirectory 'node.exe')) {
     $env:PATH = "$NodeDirectory;$env:PATH"
