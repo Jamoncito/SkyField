@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8"><title>Informe de rotación · Júpiter Jr</title>
+<style>
+@page {size:A4;margin:13mm 14mm 17mm}
+*{box-sizing:border-box} body{margin:0;font:10pt Arial,sans-serif;color:#163629;line-height:1.38}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6mm}
+.brand{display:flex;gap:9px;align-items:center;font-weight:700;font-size:15pt}.brand img{width:33px;height:33px}
+.meta{font-size:8pt;color:#546c5f;text-align:right}
+.hero{background:#123a2c;color:white;padding:7mm;border-radius:4mm;margin-bottom:5mm}
+.hero h1{margin:1mm 0 2mm;font-size:26pt;line-height:1.06;letter-spacing:-.8pt}
+.hero p{margin:0;color:#d3e2d9}.tag{color:#dcf882;font-weight:bold;text-transform:uppercase;font-size:8pt;letter-spacing:1pt}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:5mm;margin:0 0 4mm}
+.card{padding:4mm;border:1px solid #dee7dc;border-radius:3mm;background:#f7f9f4}
+.card p{margin:1.4mm 0} h2{font-size:14pt;margin:3mm 0 2mm} h3{margin:0 0 1.5mm;font-size:11pt}
+.map{width:100%;height:36mm;object-fit:cover;border-radius:2mm}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin-bottom:4mm}.kpi strong{font-size:17pt;display:block}
+.plot{width:100%;height:61mm;object-fit:contain;display:block;margin-bottom:1mm}.plot.comparison{height:52mm}.source{font-size:8pt;color:#536d5d;margin:0;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%;font-size:9pt;margin-bottom:3mm} td,th{text-align:left;border-bottom:1px solid #dde7db;padding:2mm}
+th{background:#e9f0e6}.chosen{background:#e8f2d5}.newpage{break-before:page} section,table,tr{break-inside:avoid}
+ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;background:#eef3e6;border-radius:2mm;margin-top:3mm}
+</style><body>
+<header><div class="brand"><img src="{{logo}}" alt="">Júpiter Jr</div><div class="meta">Informe {{item.id|string|truncate(13,True,'')}}<br>{{item.created.date().isoformat()}}</div></header>
+<div class="hero"><div class="tag">{{output.status}} · Catálogo ilustrativo</div><h1>Informe de rotación agrícola</h1><p>{{field.name}} · {{item.producer}}</p></div>
+<div class="grid"><div class="card"><h3>Ficha del lote</h3><p>{{'%.6f'|format(field.lat)}}°, {{'%.6f'|format(field.lon)}}° · WGS 84</p>
+<p>{% if field.area_ha %}{{'%.2f'|format(field.area_ha)}} ha{% else %}Punto exploratorio · perímetro pendiente{% endif %}</p>
+<p>Versión {{field.version}} · {{field.source}}</p><p>Prioridad: {{{'balanced':'Equilibrada','water':'Agua','cover':'Cobertura','diversity':'Diversidad'}[item.inputs.priority]}}</p></div><div class="card"><img class="map" src="{{map_data}}" alt="Mapa esquemático del lote con norte y escala"></div></div>
+<h2>{{selected.names|join(' → ')}}</h2>
+<div class="kpis">{% for key in ['deficit_mm','stress_days','cover_pct'] %}{% set v=selected.metrics.historical[key] %}<div class="card kpi">{{metrics[key][0]}}<strong>{{v if v is not none else 'Pendiente'}}{% if v is not none %} <small>{{metrics[key][1]}}</small>{% endif %}</strong></div>{% endfor %}</div>
+<h2>Clima histórico del punto</h2><img class="plot" src="{{chart}}" alt="Clima histórico mensual"><p class="source">{{output.source.product}} · {{output.source.start}} a {{output.source.end}} · {{output.source.time_standard}} · {{output.source.rows}} días · {{output.source.support}}</p>
+<div class="newpage"></div>
+<header><div class="brand"><img src="{{logo}}" alt="">Júpiter Jr</div><div class="meta">Comparación y procedencia</div></header>
+<h2>Comparación de tres campañas</h2><img class="plot comparison" src="{{comparison}}" alt="Déficit y cobertura por alternativa">
+<table><thead><tr><th>Rotación</th><th>Puntaje</th><th>Déficit (mm)</th><th>Cobertura</th></tr></thead><tbody>
+{% for r in output.alternatives + ([output.reference] if output.reference else []) %}<tr class="{{'chosen' if r.id==selected.id else ''}}"><td>{% if r.id=='reference' %}Referencia · {% endif %}{{r.names|join(' → ')}}</td><td>{{r.score}}</td><td>{{r.metrics.historical.deficit_mm if r.metrics.historical.deficit_mm is not none else 'Pendiente'}}</td><td>{{r.metrics.historical.cover_pct}} %</td></tr>{% endfor %}</tbody></table>
+{% if not output.reference %}<p class="source">Referencia pendiente. El cultivo anterior no fue declarado.</p>{% endif %}
+<h3>Calendario de la opción elegida</h3><p>{% for c in selected.calendar %}Campaña {{loop.index}} · {{c.crop}} (mes {{c.month}}, {{c.duration}} días){{' / ' if not loop.last else ''}}{% endfor %}</p>
+<p>Ventanas de tres años: {{selected.metrics.historical.windows|join(', ') if selected.metrics.historical.windows else 'pendientes'}}. Sensibilidad: lluvia {{item.inputs.rainfall_shift_pct}} % y temperatura {{item.inputs.warming_c}} °C.</p>
+<h3>Suelo y datos por confirmar</h3><p>{{output.missing|join(', ') or 'Entradas declaradas por el productor.'}}. {% if output.trial %}Se habilitaron supuestos de ensayo para completar entradas críticas ausentes.{% endif %}</p>
+{% if output.excluded %}<p>{% for crop,reasons in output.excluded.items() %}{{crop}}: {{reasons|join(' ')}} {% endfor %}</p>{% endif %}
+<ul>{% for a in output.actions %}<li><b>{{a.item}}.</b> {{a.reason}}</li>{% endfor %}</ul>
+<h3>Calidad y procedencia</h3><p class="source">Pesos nominales: agua {{(100*output.weights[0])|round|int}} %, cobertura {{(100*output.weights[1])|round|int}} %, diversidad {{(100*output.weights[2])|round|int}} %. {% if selected.metrics.sensitivity.deficit_mm is not none %}Déficit medio bajo sensibilidad: {{selected.metrics.sensitivity.deficit_mm}} mm.{% endif %}</p><p class="source">Análisis {{item.run_id}} · Versión {{output.version}} · Catálogo {{output.catalog_version}} · FAO 56. {{output.source.missing_days}} días ausentes y {{output.source.incomplete_days}} observaciones incompletas.<br>SHA-256 {{output.source.sha256}}</p>
+<p class="source" style="margin-top:2mm">{{output.limitations|join(' ')}}</p>
+</body></html>

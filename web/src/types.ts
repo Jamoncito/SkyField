@@ -1,0 +1,27 @@
+import type { MultiPolygon, Point, Polygon } from 'geojson';
+
+export type Shape = Point | Polygon | MultiPolygon;
+export type Site = {id:string; name:string; geometry:Shape; lon:number; lat:number; area_ha:number|null;
+  version:number; pilot:boolean; source:string; multicell:boolean; updated:string};
+export type User = {id:string; name:string; email:string; csrf:string};
+export type Status = 'queued'|'running'|'done'|'failed'|'cancelled';
+export type Task = {job_id:string; target_id:string; status:Status};
+export type Job = {id:string; target:string; kind:string; status:Status; progress:number; error:string|null};
+export type RunSummary = {id:string; field_id:string; field_name:string; created:string; status:Status; job_id:string};
+export type Report = {id:string; run_id:string; rotation_id:string; field_name:string; created:string; ready:boolean; status:Status; job_id:string};
+export type ImportRecord = {id:string; kind:string; created:string; status:Status; error:string|null; job_id:string;
+  summary:{rows:number;sha256?:string;missing_days?:number;incomplete_days?:number}|null};
+export type Climate = {product:string; source_class:string; source_url:string|null; support:string; point:number[];
+  start:string; end:string; rows:number; incomplete_days:number; missing_days:number; time_standard:string;
+  sha256:string; mean_temp_c:number|null; mean_annual_rain_mm:number|null; elevation_m:number|null; recorded:string};
+export type Metrics = {deficit_mm:number|null; stress_days:number|null; cover_pct:number|null; irrigation_mm:number|null;
+  windows:number[]; lowest_deficit_windows?:number; deficit_range:[number,number]|null};
+export type Option = {id:string; names:string[]; families:string[]; score:number; diversity:number;
+  metrics:{historical:Metrics; sensitivity:Metrics}; calendar:{crop:string; month:number; duration:number}[]};
+export type Result = {version:string; catalog_version:string; catalog_source:string; status:string; trial:boolean;
+  source:Climate; candidate_count:number; alternatives:Option[]; reference:Option|null; excluded:Record<string,string[]>;
+  missing:string[]; weights:number[]; monthly:{month:number;rain:number|null;temp:number|null;rain_years:number;temp_years:number}[];
+  limitations:string[]; actions:{item:string;reason:string}[];
+  soil:{sample_code:string;sampled_on:string;depth_from_cm:number;depth_to_cm:number;variable:string;value:string;unit:string;method:string}[];
+  campaigns:{crop_code:string;cultivar:string;planting_date:string;harvest_date:string}[]};
+export type Run = {id:string; created:string; field:Site; inputs:{priority:string; rainfall_shift_pct:number; warming_c:number}; result:Result|null};
