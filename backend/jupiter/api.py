@@ -16,10 +16,11 @@ from .db import ROOT, STORAGE, engine, many, one, query
 from .geometry import FIELD_COLUMNS, save_field, seed_pilot
 from .jobs import JobError, enqueue
 from .model import CROPS
+from .catalog import CONTEXT, catalog
 from .soil import lookup
 
 LOG = logging.getLogger("jupiter.api")
-app = FastAPI(title="Júpiter Jr", version="1.1.0", docs_url="/api/docs",
+app = FastAPI(title="Júpiter Jr", version="1.2.0", docs_url="/api/docs",
               openapi_url="/api/openapi.json", redoc_url=None)
 
 class Credentials(BaseModel):
@@ -55,6 +56,7 @@ class AnalysisInput(BaseModel):
     soil_ph: float | None = Field(default=None, ge=0, le=14)
     soil_ec: float | None = Field(default=None, ge=0, le=100)
     plant_month: int = Field(default=11, ge=1, le=12)
+    plant_months: list[int] | None = Field(default=None, min_length=3, max_length=3)
     trial: bool = False
     rainfall_shift_pct: float = Field(default=-15, ge=-60, le=60)
     warming_c: float = Field(default=1, ge=-4, le=6)
@@ -62,8 +64,15 @@ class AnalysisInput(BaseModel):
     @field_validator("previous")
     @classmethod
     def previous_crop(cls, value):
-        if value != "unknown" and value not in CROPS:
+        if value != "unknown" and value not in CROPS and value not in CONTEXT:
             raise ValueError("Cultivo desconocido")
+        return value
+
+    @field_validator("plant_months")
+    @classmethod
+    def campaign_months(cls, value):
+        if value is not None and any(not 1 <= month <= 12 for month in value):
+            raise ValueError("Selecciona un mes válido para cada campaña")
         return value
 
     @field_validator("allowed_crops")
@@ -174,6 +183,12 @@ def see_guide(user=Depends(write_user)):
     with engine.begin() as conn:
         query(conn, "UPDATE users SET guide_seen=true WHERE id=:i", i=user["id"])
 
+@app.post("/api/me/guide/start")
+def start_guide(user=Depends(write_user)):
+    with engine.begin() as conn:
+        claimed = one(conn, "UPDATE users SET guide_seen=true WHERE id=:i AND NOT guide_seen RETURNING id", i=user["id"])
+    return {"show":bool(claimed)}
+
 @app.get("/api/fields")
 def fields(offset: int = 0, user=Depends(read_user)):
     with engine.connect() as conn:
@@ -251,8 +266,28 @@ def import_file(field_id: UUID, kind: str = Form(), file: UploadFile = File(), u
 
 @app.get("/api/crops")
 def crops(user=Depends(read_user)):
-    return [{"code":code,"name":crop["name"],"family":crop["family"],"months":crop["window"]}
-            for code,crop in CROPS.items()]
+    return catalog()
+
+@app.get("/api/field-exposure")
+def field_exposure(user=Depends(read_user)):
+    with engine.connect() as conn:
+        rows = many(conn,"""SELECT DISTINCT ON (f.id) f.id,f.name,ST_X(f.point) AS lon,ST_Y(f.point) AS lat,
+          ST_AsGeoJSON(f.geom)::json AS geometry,a.id AS analysis_id,a.created,r.output
+          FROM fields f LEFT JOIN analysis_runs a ON a.field_id=f.id AND a.field_version=f.version
+          LEFT JOIN results r ON r.run_id=a.id
+          WHERE f.owner=:o ORDER BY f.id,(r.run_id IS NOT NULL) DESC,a.created DESC LIMIT 100""",o=user["id"])
+    fields = []
+    for row in rows:
+        output = row["output"] or {}
+        selected = next(iter(output.get("alternatives",[])),{})
+        historical = selected.get("metrics",{}).get("historical",{})
+        duration = sum(crop["duration"] for crop in selected.get("calendar",[]))
+        stress = historical.get("stress_days")
+        fields.append({**{k:row[k] for k in ("id","name","lon","lat","geometry","analysis_id","created")},
+                       "stress_pct":round(100*stress/duration,1) if stress is not None and duration else None,
+                       "hot_days":historical.get("hot_days"),"frost_days":historical.get("frost_days"),
+                       "support":output.get("source",{}).get("support"),"model":output.get("version")})
+    return fields
 
 
 @app.get("/api/fields/{field_id}/soil-profile")
@@ -414,10 +449,10 @@ if os.getenv("SERVE_WEB") == "1":
 
     app.mount("/regional", StaticFiles(directory=dist / "regional"), name="regional")
 
-    @app.get("/{path:path}", include_in_schema=False)
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def spa(path: str):
         if path.startswith("api/"):
             raise HTTPException(404, "Ruta desconocida.")
         if path in {"agro-aerial.webp", "favicon.svg"} and (dist / path).is_file():
             return FileResponse(dist / path)
-        return FileResponse(dist / "index.html")
+        return FileResponse(dist / "index.html", headers={"Cache-Control":"no-cache"})

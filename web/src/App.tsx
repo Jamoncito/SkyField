@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, ChevronDown, CloudSun, FileText, Globe2,
   LayoutDashboard, Leaf, LogOut, MapPin, Menu, Plus, Sprout, X } from 'lucide-react';
 import { api,day,errorText,n,post,session,ApiError } from './client';
@@ -6,6 +6,7 @@ import type { Report, RunSummary, Site, User } from './types';
 import { FieldEditor } from './FieldEditor';
 import { Compare } from './Compare';
 import { OFFLINE_MAP } from './offline';
+import { GuidedTour } from './GuidedTour';
 
 const RegionalMap=lazy(()=>import('./Map'));
 
@@ -62,7 +63,7 @@ function Dashboard({user,sites,runs,reports,go}:{user:User;sites:Site[];runs:Run
   const pilot=sites.find(x=>x.pilot);
   const ready=runs.filter(r=>r.status==='done');
   return <>
-    <section className="hero">
+    <section className="hero" data-tour="dashboard">
       <div className="hero-content"><span className="eyebrow light"><span/> PLANIFICACIÓN DE CULTIVOS</span>
         <h1>Planifica tu próxima<br/>rotación</h1>
         <p>Ubica tu lote, compara tres campañas con clima histórico y lleva la evidencia a tu próxima decisión.</p>
@@ -98,36 +99,27 @@ function SiteRow({site,go}:{site:Site;go:Go}) {
 
 export function App(){return window.location.pathname===OFFLINE_MAP?<OfflineMap/>:<Workspace/>;}
 
-const guide=[
-  ['Ubica tu terreno','En Mis lotes, busca una provincia o municipio, ingresa coordenadas o dibuja el perímetro. Para practicar, abre el lote piloto.'],
-  ['Revisa el suelo','Abre el perfil de suelo para consultar estimaciones regionales. Si tienes datos de laboratorio, introdúcelos en el análisis.'],
-  ['Compara tres campañas','Elige el mes de siembra, riego, cultivos disponibles y tu prioridad. Revisa el histórico y cómo cambia el déficit bajo otro escenario.'],
-  ['Guarda la evidencia','Descarga el informe con las razones, las fuentes y los datos que faltan verificar con tu equipo agronómico.'],
-];
-
-function Guide({dismiss}:{dismiss:()=>Promise<void>}){
-  const [step,setStep]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  async function finish(){setBusy(true);try{await dismiss();}catch(e){setError(errorText(e));}finally{setBusy(false);}}
-  return <section className="card panel onboarding" aria-label="Guía de bienvenida">
-    <div className="section-head"><div><h2>Primeros pasos</h2><p aria-live="polite">{step+1} de {guide.length} · {guide[step][0]}</p></div>
-      <button className="text-button" onClick={()=>void finish()} disabled={busy}>Omitir guía</button></div>
-    <p>{guide[step][1]}</p>
-    {error&&<p role="alert" className="error">{error}</p>}
-    <div className="button-row">{step>0&&<button className="button secondary" onClick={()=>setStep(step-1)}>Anterior</button>}
-      <button className="button primary" disabled={busy} onClick={()=>step+1<guide.length?setStep(step+1):void finish()}>{step+1<guide.length?'Siguiente':'Terminar guía'}<ArrowRight size={16}/></button></div>
-  </section>;
-}
-
 function Workspace() {
   const {path,go}=useLocation();
   const [user,setUser]=useState<User|null>(),[initialError,setInitialError]=useState('');
   const [sites,setSites]=useState<Site[]>([]),[runs,setRuns]=useState<RunSummary[]>([]),[reports,setReports]=useState<Report[]>([]);
   const [error,setError]=useState(''),[menu,setMenu]=useState(false),[profile,setProfile]=useState(false);
   const [showGuide,setShowGuide]=useState(false);
+  const guideClaim=useRef('');
+  const [slow,setSlow]=useState(false);
   function signed(u:User|null){session(u);setUser(u);}
   function loadUser(){setInitialError('');void api<User>('/me').then(signed).catch(err=>{
     if(err instanceof ApiError&&err.status===401)signed(null);else setInitialError(errorText(err));});}
   useEffect(loadUser,[]);
+  useEffect(()=>{const timer=window.setTimeout(()=>setSlow(true),12000);return ()=>clearTimeout(timer);},[]);
+  useEffect(()=>{
+    if(!user||user.guide_seen||guideClaim.current===user.id)return;
+    guideClaim.current=user.id;
+    void post<{show:boolean}>('/me/guide/start').then(result=>{
+      setUser(current=>current?.id===user.id?{...current,guide_seen:true}:current);
+      if(result.show){go('/');setShowGuide(true);}
+    }).catch(err=>{guideClaim.current='';setError(errorText(err));});
+  },[user]);
   async function refresh(){
     try {
       const [s,a,r]=await Promise.all([api<Site[]>('/fields'),api<RunSummary[]>('/analyses'),api<Report[]>('/reports')]);
@@ -142,7 +134,9 @@ function Workspace() {
   },[user,runs,reports]);
 
   if(initialError) return <main className="empty app-empty"><Sprout size={31}/><h1>Abriendo Júpiter Jr</h1><p>{initialError}</p><button className="button primary" onClick={loadUser}>Reintentar</button></main>;
-  if(user===undefined)return <main className="empty app-empty"><Sprout size={31}/><p>Cargando Júpiter Jr…</p></main>;
+  if(user===undefined)return <main className="empty app-empty"><Sprout size={31}/><h1>Conectando con Júpiter Jr</h1>
+    <p>{slow?'El alojamiento gratuito puede tardar alrededor de un minuto en activarse después de una pausa.':'Abriendo tu espacio de planificación…'}</p>
+    {slow&&<button className="button secondary" onClick={loadUser}>Reintentar conexión</button>}</main>;
   if(user===null)return <Access onLogin={u=>{signed(u);go('/');}}/>;
   const parts=path.split('/').filter(Boolean);
   const section=parts[0]??'';
@@ -155,7 +149,7 @@ function Workspace() {
     <aside className={'sidebar '+(menu?'open':'')}>
       <button className="brand-button" onClick={()=>route('/')}><Brand/></button>
       <div className="nav-label">ESPACIO DE TRABAJO</div>
-      <nav aria-label="Navegación principal">{navigation.map(({name,path:url,Icon})=>{
+      <nav data-tour="navigation" aria-label="Navegación principal">{navigation.map(({name,path:url,Icon})=>{
         const active=url==='/'?path==='/':path.startsWith(url);
         return <button key={url} aria-current={active?'page':undefined} className={active?'active':''} onClick={()=>route(url)}><Icon size={18}/><span>{name}</span></button>;
       })}</nav>
@@ -165,28 +159,28 @@ function Workspace() {
     </aside>
     <div className="surface">
       <header className="topbar">
-        <div className="breadcrumb"><button className="icon-btn mobile-menu" aria-label="Abrir menú" onClick={()=>setMenu(!menu)}>{menu?<X size={20}/>:<Menu size={20}/>}</button>
+        <div className="breadcrumb"><button data-tour="mobile-navigation" className="icon-btn mobile-menu" aria-label="Abrir menú" onClick={()=>setMenu(!menu)}>{menu?<X size={20}/>:<Menu size={20}/>}</button>
           <span className="crumb-home">Espacio de trabajo</span><span className="slash">/</span><strong>{title}</strong></div>
-        <div className="profile-wrap"><button className="profile" aria-expanded={profile} onClick={()=>setProfile(!profile)}><span className="avatar">{user.name[0].toUpperCase()}</span><b>{firstName}</b><ChevronDown size={14}/></button>
+        <div className="profile-wrap"><button data-tour="profile" className="profile" aria-expanded={profile} onClick={()=>setProfile(!profile)}><span className="avatar">{user.name[0].toUpperCase()}</span><b>{firstName}</b><ChevronDown size={14}/></button>
           {profile&&<div className="profile-menu card"><b>{user.name}</b><small>{user.email}</small><button className="button secondary" onClick={()=>{route('/');setShowGuide(true);}}>Ver guía</button><button className="button secondary" onClick={close}><LogOut size={16}/> Cerrar sesión</button></div>}</div>
       </header>
       <main className="main">
         {error&&<div className="error" role="alert">{error} <button className="text-button" onClick={refresh}>Reintentar</button></div>}
-        {section===''&&<>{(!user.guide_seen||showGuide)&&<Guide key={user.id} dismiss={async()=>{
-          if(!user.guide_seen){await post('/me/guide');setUser({...user,guide_seen:true});}setShowGuide(false);
-        }}/>}<Dashboard user={user} sites={sites} runs={runs} reports={reports} go={route}/></>}
-        {section==='lotes'&&!parts[1]&&<><div className="page-heading"><div><h1>Mis lotes</h1><p>Dibuja tu terreno o guarda un punto de consulta exploratorio.</p></div><button className="button primary" onClick={()=>route('/lotes/nuevo')}><Plus size={18}/> Nuevo lote</button></div>
+        {section===''&&<Dashboard user={user} sites={sites} runs={runs} reports={reports} go={route}/>}
+        {section==='lotes'&&!parts[1]&&<><div className="page-heading" data-tour="lots"><div><h1>Mis lotes</h1><p>Dibuja tu terreno o guarda un punto de consulta exploratorio.</p></div><button className="button primary" onClick={()=>route('/lotes/nuevo')}><Plus size={18}/> Nuevo lote</button></div>
           <section className="card panel">{sites.length?sites.map(s=><SiteRow site={s} go={route} key={s.id}/>):<p className="muted">Todavía no hay lotes guardados.</p>}</section></>}
         {section==='lotes'&&parts[1]&&<FieldEditor key={parts[1]} id={parts[1]==='nuevo'?null:parts[1]} analyzing={parts[2]==='analizar'} go={route} refresh={refresh}/>}
         {section==='comparar'&&parts[1]&&<Compare key={parts[1]} id={parts[1]} summary={runs.find(r=>r.id===parts[1])} go={route} refresh={refresh}/>}
-        {section==='comparar'&&!parts[1]&&<><div className="page-heading"><div><h1>Comparar rotaciones</h1><p>Consulta los escenarios y recupera análisis guardados.</p></div><button className="button primary" onClick={()=>route('/lotes')}><MapPin size={17}/> Elegir lote</button></div>
+        {section==='comparar'&&!parts[1]&&<><div className="page-heading" data-tour="runs"><div><h1>Comparar rotaciones</h1><p>Consulta los escenarios y recupera análisis guardados.</p></div><button className="button primary" onClick={()=>route('/lotes')}><MapPin size={17}/> Elegir lote</button></div>
           <section className="card panel">{runs.length?runs.map(run=><button key={run.id} className="site-row" onClick={()=>route('/comparar/'+run.id)}><span className="site-icon"><Activity size={19}/></span><span className="site-name"><b>{run.field_name}</b><small>{day(run.created)}</small></span><StatusChip status={run.status}/><ArrowRight size={17}/></button>):<Empty icon="analysis" title="Tu primera comparación" text="Abre un lote y selecciona Analizar para comparar rotaciones."/>}</section></>}
-        {section==='informes'&&<><div className="page-heading"><div><h1>Informes</h1><p>Descarga los documentos y la evidencia de los análisis.</p></div><button className="button secondary" onClick={()=>route('/comparar')}><ArrowLeft size={16}/> Comparaciones</button></div>
+        {section==='informes'&&<><div className="page-heading" data-tour="reports"><div><h1>Informes</h1><p>Descarga los documentos y la evidencia de los análisis.</p></div><button className="button secondary" onClick={()=>route('/comparar')}><ArrowLeft size={16}/> Comparaciones</button></div>
           <section className="card panel">{reports.length?reports.map(r=><article key={r.id} className="report-row"><div className="site-name"><b>{r.field_name}</b><small>{day(r.created)} · Folio {r.id.slice(0,8)}</small></div><StatusChip status={r.status}/>{r.ready?<div className="button-row">
             <a className="button primary small" href={'/api/reports/'+r.id+'/pdf'}><ArrowDownToLine size={16}/> PDF</a><a className="button secondary small" href={'/api/reports/'+r.id+'/csv'}>CSV</a>
             <a className="button secondary small" href={'/api/reports/'+r.id+'/daily'}>Serie diaria</a></div>:['failed','cancelled'].includes(r.status)&&<button className="button secondary small" onClick={()=>void post('/jobs/'+r.job_id+'/retry').then(refresh).catch(e=>setError(errorText(e)))}>Reintentar</button>}</article>):<Empty icon="report" title="Aún no hay informes" text="Abre una comparación y selecciona la rotación que quieres exportar."/>}</section></>}
       </main>
     </div>
+    {showGuide&&sites.length>0&&<GuidedTour pilot={(sites.find(s=>s.pilot)??sites[0]).id}
+      run={runs.find(r=>r.status==='done')?.id} navigate={route} onFinish={()=>{setShowGuide(false);route('/');}}/>}
   </div>;
 }
 

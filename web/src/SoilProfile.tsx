@@ -36,7 +36,7 @@ export function SoilDetails({profile}:{profile:RegionalSoil}){
 export function SoilPanel({site,disabled=false}:{site:Site;disabled?:boolean}){
   const {profile,error,busy,consult}=useSoil(site);
   const partial=profile&&profile.retention.some(l=>l.fc===null||l.wp===null);
-  return <section className="card panel"><div className="section-head"><div><h2>Análisis orientativo de suelo</h2><p>Textura, pH, carbono y retención de agua estimados para el punto del lote.</p></div>
+  return <section className="card panel" data-tour="soil"><div className="section-head"><div><h2>Análisis orientativo de suelo</h2><p>Textura, pH, carbono y retención de agua estimados para el punto del lote.</p></div>
     {(!profile||partial)&&<button className="button secondary" type="button" disabled={busy||disabled||site.multicell} onClick={()=>void consult()}><Layers size={17}/>{busy?'Consultando SoilGrids…':partial?'Completar consulta':'Consultar suelo'}</button>}</div>
     {error&&<p className="error" role="alert">{error}</p>}
     {disabled?<p className="muted">Guarda el lote para consultar o verificar el perfil de esta versión.</p>:profile&&<SoilDetails profile={profile}/>}

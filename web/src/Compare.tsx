@@ -5,6 +5,8 @@ import { api,errorText,n,post } from './client';
 import { ClimateChart, Plot } from './Chart';
 import type { Job, Option, Run, RunSummary, Task } from './types';
 import type { Go } from './App';
+import { EnvironmentalEvidence } from './EnvironmentalEvidence';
+import { VulnerabilityMap } from './VulnerabilityMap';
 
 type Scenario = 'historical'|'sensitivity';
 const metricTitles={deficit_mm:'Déficit hídrico',stress_days:'Días con déficit',cover_pct:'Cobertura estimada',irrigation_mm:'Riego simulado'};
@@ -80,12 +82,12 @@ export function Compare({id,summary,go,refresh}:{id:string;summary?:RunSummary;g
         <Kpi Icon={Thermometer} title="Temperatura media" value={n(data.source.mean_temp_c,2)} unit="°C" detail={data.source.source_class}/>
         <Kpi Icon={Layers} title="Días de clima" value={n(data.source.rows)} unit="" detail={data.source.missing_days+' ausentes · '+data.source.incomplete_days+' incompletos'}/>
       </div>
-      <section className="card panel"><div className="section-head"><div><h2>Alternativas de rotación</h2><p>{data.alternatives.length} alternativas mostradas de {data.candidate_count} secuencias candidatas.</p></div>
+      <section className="card panel" data-tour="results"><div className="section-head"><div><h2>Alternativas de rotación</h2><p>{data.alternatives.length} alternativas mostradas de {data.candidate_count} secuencias candidatas.</p></div>
         <div className="segments" role="group" aria-label="Escenario"><button aria-pressed={scenario==='historical'} onClick={()=>setScenario('historical')}>Histórico</button><button aria-pressed={scenario==='sensitivity'} onClick={()=>setScenario('sensitivity')}>Sensibilidad</button></div></div>
         {scenario==='sensitivity'&&<p className="notice">Hipótesis {n(run?.inputs.rainfall_shift_pct,1)} % de lluvia y {n(run?.inputs.warming_c,1)} °C de temperatura.</p>}
         {data.alternatives.length?<div className="option-grid">{data.alternatives.map((r,i)=><OptionCard key={r.id} option={r} i={i} selected={choice===r.id} scenario={scenario} onSelect={()=>{setChoice(r.id);setReport(undefined);setReportJob(undefined);setReportError('');}}/>)}</div>:
-          <p className="notice">Con los filtros actuales quedan menos de tres cultivos compatibles para una secuencia. Revisa el mes de siembra y los datos del perfil.</p>}
-        <p className="reference">{data.reference?'Referencia asumida a partir del cultivo anterior · '+data.reference.names.join(' → ')+' · Déficit '+n(data.reference.metrics[scenario].deficit_mm,1)+' mm':'Referencia pendiente · declara el cultivo anterior para incluirla.'}</p>
+          <p className="notice">El calendario o los filtros actuales impiden una secuencia de tres cultivos. Revisa ventanas, duración, mes de cada campaña y perfil de suelo.</p>}
+        <p className="reference">{data.reference?'Referencia asumida a partir del cultivo anterior · '+data.reference.names.join(' → ')+' · Déficit '+n(data.reference.metrics[scenario].deficit_mm,1)+' mm':'La referencia requiere un cultivo anterior compatible con el modelo anual y el calendario elegido.'}</p>
       </section>
       {selected&&metrics&&<section className="card panel"><div className="section-head"><div><h2>Calendario de la alternativa elegida</h2><p>{selected.names.join(' → ')}</p></div>
         <Leaf className="green" size={22}/></div>
@@ -96,6 +98,8 @@ export function Compare({id,summary,go,refresh}:{id:string;summary?:RunSummary;g
       {selected?.recommendation&&<section className="card panel advice"><h2>{selected.recommendation.title}</h2><h3>{selected.names.join(' → ')}</h3>
         <ul>{selected.recommendation.reasons.map(reason=><li key={reason}>{reason}</li>)}</ul>
         <p className="notice">{selected.recommendation.check}</p><a href={selected.recommendation.source} target="_blank" rel="noreferrer">Prácticas de salud del suelo · USDA NRCS</a></section>}
+      {data.environment&&<EnvironmentalEvidence environment={data.environment} option={selected} scenario={scenario}/>}
+      {data.environment&&<VulnerabilityMap/>}
       <div className="evidence-grid">
         <section className="card panel"><div className="section-head"><div><h2>Clima mensual histórico</h2><p>{data.source.product} · meses completos</p></div></div>
           <div className="legend"><span><i/> Lluvia acumulada</span><span><i/> Temperatura media</span></div><ClimateChart monthly={data.monthly}/></section>

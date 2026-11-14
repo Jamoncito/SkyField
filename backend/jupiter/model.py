@@ -1,14 +1,14 @@
 import calendar
 from datetime import date, timedelta
-from itertools import permutations
+from itertools import product
 
 import numpy as np
 
 from .climate import COLS
 from .jobs import JobError
 
-VERSION = "water-balance-1.1.0"
-CATALOG_VERSION = "fao56-regional-2"
+VERSION = "water-balance-1.2.0"
+CATALOG_VERSION = "fao56-regional-3"
 FAO = "https://www.fao.org/4/x0490e/x0490e00.htm"
 # FAO 56 tables 11, 12, 22 and 23 provide reference coefficients and ranges.
 # The calendar and crop cover assumptions require local cultivar calibration.
@@ -31,10 +31,30 @@ CROPS = {
                       root=1.15,p=.45,window=[4,5,6],ph=None,ec=None,cover=.78),
     "wheat": dict(name="Trigo de primavera", family="Poaceae", days=[20,30,60,40], kc=[.30,1.15,.30],
                   root=1.25,p=.55,window=[5,6,7],ph=None,ec=6.,cover=.80),
+    "cotton": dict(name="Algodón",family="Malvaceae",days=[30,50,60,55],kc=[.35,1.15,.50],
+                   root=1.2,p=.65,window=[10,11,12],ph=None,ec=7.7,cover=.78),
+    "cassava": dict(name="Yuca de ciclo corto",family="Euphorbiaceae",days=[20,40,90,60],kc=[.30,.80,.30],
+                    root=.65,p=.35,window=[10,11,12,1],ph=None,ec=None,cover=.83),
+    "potato": dict(name="Papa",family="Solanaceae",days=[25,30,45,30],kc=[.50,1.15,.75],
+                   root=.5,p=.35,window=[4,5,6,9,10],ph=None,ec=1.7,cover=.78),
+    "tomato": dict(name="Tomate",family="Solanaceae",days=[30,40,40,25],kc=[.60,1.15,.80],
+                   root=.9,p=.40,window=[4,5,6,9,10],ph=None,ec=2.5,cover=.80),
+    "sweetpotato": dict(name="Camote",family="Convolvulaceae",days=[15,30,50,30],kc=[.50,1.15,.65],
+                        root=1.,p=.65,window=[10,11,12,1],ph=None,ec=1.5,cover=.87),
+    "cowpea": dict(name="Caupí",family="Fabaceae",days=[20,30,30,20],kc=[.40,1.05,.35],
+                   root=.8,p=.45,window=[10,11,12,1,2,4,5],ph=None,ec=4.9,cover=.84),
 }
 for code in ("soy", "maize", "sorghum"):
     CROPS[code]["window"] += [5,6,7] if code != "soy" else [6,7]
 WEIGHTS = {"balanced":[.50,.30,.20],"water":[.78,.12,.10],"cover":[.23,.67,.10],"diversity":[.25,.15,.60]}
+
+
+def planting_months(inputs):
+    return inputs.get("plant_months") or [inputs["plant_month"]]*3
+
+
+def planting_dates(year, inputs):
+    return [date(year+i,month,1) for i,month in enumerate(planting_months(inputs))]
 
 def et0(rows, latitude, elevation, warming=0):
     valid = np.array([all(row[c] is not None for c in COLS[:6]) for row in rows])
@@ -105,8 +125,8 @@ def sequences(inputs):
         if inputs.get("allowed_crops") is not None and code not in inputs["allowed_crops"]:
             continue
         reasons = []
-        if inputs["plant_month"] not in crop["window"]:
-            reasons.append("Mes de siembra fuera de la ventana ilustrativa.")
+        if not any(month in crop["window"] for month in planting_months(inputs)):
+            reasons.append("Meses de siembra fuera de la ventana orientativa.")
         if inputs["soil_ph"] is not None and crop["ph"] and not crop["ph"][0] <= inputs["soil_ph"] <= crop["ph"][1]:
             reasons.append("pH declarado fuera del intervalo ilustrativo.")
         if inputs["soil_ec"] is not None and crop["ec"] is not None and inputs["soil_ec"] > crop["ec"]:
@@ -117,8 +137,15 @@ def sequences(inputs):
             viable[code] = crop
     # Three distinct crops, with a demonstration restriction against consecutive
     # soybeans on the transition from the previous crop.
-    patterns = [p for p in permutations(viable, 3) if (p[0], inputs["previous"]) != ("soy","soy")]
+    months = planting_months(inputs)
+    slots = [[code for code,crop in viable.items() if month in crop["window"]] for month in months]
+    dates = planting_dates(2021, inputs)
+    patterns = [p for p in product(*slots) if len(set(p)) == 3
+                and (p[0], inputs["previous"]) != ("soy","soy")
+                and all(sum(CROPS[p[i]]["days"]) <= (dates[i+1]-dates[i]).days for i in range(2))]
     base = [inputs["previous"]]*3 if inputs["previous"] in CROPS else None
+    if base and any(sum(CROPS[base[i]]["days"]) > (dates[i+1]-dates[i]).days for i in range(2)):
+        base = None
     return patterns, excluded, base
 
 def growth(crop, day):
@@ -135,7 +162,7 @@ def growth(crop, day):
     return peak+(end-peak)*f, crop["root"], crop["cover"]*(1-.45*f)
 
 def project(rows, planting_year, seq, inputs, profile, scenario, trace=False):
-    planting = [date(planting_year+i, inputs["plant_month"], 1) for i in range(3)]
+    planting = planting_dates(planting_year,inputs)
     full_depth = profile["depth_m"]
     fc, wp = profile["theta_fc"], profile["theta_wp"]
     monthly_coverage, total_deficit, stressed, irrigation_sum = [], 0., 0, 0.
@@ -193,8 +220,9 @@ def windows(rows, inputs, elevation, latitude):
     ]:
         demands = et0(rows, latitude, elevation, warming)
         for year in span:
-            first = date(year,inputs["plant_month"],1)
-            end = date(year+3,inputs["plant_month"],1)
+            months = planting_months(inputs)
+            first = date(year,months[0],1)
+            end = date(year+3,months[2],1)
             selected = [mapping.get(first+timedelta(days=i)) for i in range((end-first).days)]
             if any(i is None or not np.isfinite(demands[i]) or rows[i]["precip_mm_day"] is None for i in selected):
                 continue
@@ -204,7 +232,7 @@ def windows(rows, inputs, elevation, latitude):
 
 def simulate_window(rows, year, choices, inputs, profile, scenario):
     """Evaluate the daily recurrence for all rotations in parallel within one window."""
-    planting = [date(year+i, inputs["plant_month"], 1) for i in range(3)]
+    planting = planting_dates(year,inputs)
     codes = list(CROPS)
     index = {code:i for i,code in enumerate(codes)}
     paths = np.array([[index[code] for code in seq] for _,seq in choices])
@@ -321,7 +349,9 @@ def run_model(rows, source, site, inputs, soil_profile=None):
         historic = metrics["historical"]
         if historic["cover_pct"] is None:
             schematic = [growth(CROPS[c], day)[2] for c in seq for day in range(sum(CROPS[c]["days"]))]
-            historic["cover_pct"] = round(100*sum(schematic)/(365*3),2)
+            dates = planting_dates(2021,inputs)
+            period = (date(2024,planting_months(inputs)[2],1)-dates[0]).days
+            historic["cover_pct"] = round(100*sum(schematic)/period,2)
         # Fixed anchors allow preferences to change the ordering without changing
         # the score of an option when a competing option is removed.
         terms = [None if historic["deficit_mm"] is None else max(0,1-historic["deficit_mm"]/1200),
@@ -331,8 +361,8 @@ def run_model(rows, source, site, inputs, soil_profile=None):
         records.append(dict(id=rotation_id, crops=list(seq), names=[CROPS[c]["name"] for c in seq],
                             families=families, diversity=diversity, score=score, metrics=metrics,
                             criteria=dict(zip(["water","cover","diversity"],terms)),
-                            calendar=[dict(crop=CROPS[c]["name"], month=inputs["plant_month"],
-                                           duration=sum(CROPS[c]["days"])) for c in seq]))
+                            calendar=[dict(crop=CROPS[c]["name"], month=month,
+                                           duration=sum(CROPS[c]["days"])) for c,month in zip(seq,planting_months(inputs))]))
     reference = next((r for r in records if r["id"]=="reference"),None)
     ranked = sorted((r for r in records if r["id"]!="reference"),key=lambda r:(-r["score"],r["id"]))[:3]
     for case in ("historical", "sensitivity"):
@@ -354,6 +384,7 @@ def run_model(rows, source, site, inputs, soil_profile=None):
                   climate_indicators=climate_indicators(rows,latitude=site["lat"],elevation=elevation),
                   catalog_parameters=CROPS,
                   limitations=["Coeficientes y raíces de referencia FAO 56. Calendario, cobertura y cultivares requieren validación local.",
+                    "Tres campañas anuales en años sucesivos. Confirma aptitud térmica, altitud y manejo por zona. La simulación prioriza el agua y la cobertura.",
                     "Balance con humedad inicial al 50 %, escorrentía ilustrativa de 10 % y suelo uniforme.",
                     "La humedad relativa media aproxima la presión real de vapor. El clima es regional.",
                     "El escenario de sensibilidad aplica factores uniformes a la secuencia diaria histórica.",

@@ -21,6 +21,23 @@ def wait_job(client, task, expected="done", timeout=60):
         time.sleep(.8)
     raise AssertionError(last)
 
+
+def walk_tour(page,output,prefix="recorrido"):
+    tour=page.get_by_role("dialog")
+    expect(tour).to_be_visible(timeout=20000)
+    for i in range(21):
+        expect(tour.get_by_text(f"Recorrido · {i+1} de 21",exact=True)).to_be_visible()
+        button=tour.get_by_role("button",name="Comenzar" if i==20 else "Siguiente",exact=True)
+        expect(button).to_be_enabled(timeout=15000)
+        page.wait_for_timeout(400)
+        assert page.locator('.tour-spotlight').count()==1,i
+        box=tour.bounding_box()
+        assert box['x']>=0 and box['x']+box['width']<=page.viewport_size['width']+1
+        assert box['y']>=0 and box['y']+box['height']<=page.viewport_size['height']+1
+        if i in (0,5,12,15,20):page.screenshot(path=output/f"{prefix}-{i+1}.png")
+        button.click()
+    expect(tour).to_have_count(0)
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--base",default="http://localhost:8080")
@@ -47,11 +64,10 @@ def main():
         page.get_by_label("Contraseña").fill(password)
         page.get_by_role("button",name="Crear cuenta").click()
         expect(page.get_by_role("heading",name="Planifica tu próxima rotación")).to_be_visible(timeout=20000)
-        expect(page.get_by_role("heading",name="Primeros pasos")).to_be_visible()
-        page.get_by_role("button",name="Siguiente").click()
-        expect(page.get_by_text("2 de 4 · Revisa el suelo")).to_be_visible()
-        page.get_by_role("button",name="Omitir guía").click()
-        expect(page.get_by_role("heading",name="Primeros pasos")).to_have_count(0,timeout=20000)
+        walk_tour(page,args.output)
+        page.reload()
+        expect(page.get_by_role("button",name="Explorar lote piloto")).to_be_visible(timeout=20000)
+        expect(page.get_by_role("dialog")).to_have_count(0)
         expect(page.get_by_role("button",name="Explorar lote piloto")).to_be_visible()
         page.screenshot(path=args.output/"panel.png")
 
@@ -59,6 +75,9 @@ def main():
         for cookie in context.cookies():
             client.cookies.set(cookie["name"],cookie["value"])
         client.headers["X-CSRF-Token"]=client.get("/me").raise_for_status().json()["csrf"]
+        assert client.post('/me/guide/start').raise_for_status().json()=={'show':False}
+        catalog=client.get('/crops').raise_for_status().json()
+        assert len(catalog)==18 and sum(c['simulated'] for c in catalog)==15
         pilot=client.get("/fields").raise_for_status().json()[0]
         assert pilot["area_ha"] is None
         aid=pilot["id"]
@@ -93,6 +112,11 @@ def main():
         page.get_by_text("Capas NASA por fecha").click()
         with page.expect_response(lambda r:"MODIS_Terra_L3_NDVI_Monthly" in r.url and r.ok, timeout=45000):
             page.get_by_label("Variable NASA",exact=True).select_option("ndvi")
+        for code,identifier in [('temperature','MODIS_Terra_Land_Surface_Temp_Day'),
+                                ('biomass','GEDI_ISS_L4B_Aboveground_Biomass_Density_Mean_201904-202303'),
+                                ('elevation','SRTM_Color_Index')]:
+            with page.expect_response(lambda r:identifier in r.url and r.ok,timeout=45000):
+                page.get_by_label('Variable NASA',exact=True).select_option(code)
         page.get_by_label("Variable NASA",exact=True).select_option("")
         page.get_by_text("Capas NASA por fecha").click()
         if args.soil:
@@ -116,6 +140,14 @@ def main():
         assert len(data["alternatives"])==3 and data["alternatives"][0]["metrics"]["historical"]["deficit_mm"]>0
         assert data["candidate_count"]>24 and len(data["moisture"]["monthly"])==132
         assert len(data["climate_indicators"])==11 and data["alternatives"][0]["recommendation"]["reasons"]
+        assert len(data['environment']['monthly'])==132 and len(data['environment']['trends'])==3
+        assert data['alternatives'][0]['timeline']['historical']
+        exposures=client.get('/field-exposure').raise_for_status().json()
+        assert exposures[0]['id']==aid and 0<=exposures[0]['stress_pct']<=100
+        page.get_by_role('button',name='Abrir mapa de lotes',exact=True).click()
+        expect(page.get_by_label('Indicador en el mapa')).to_be_visible()
+        page.get_by_label('Indicador en el mapa').select_option('hot_days')
+        page.get_by_label('Indicador en el mapa').select_option('frost_days')
         if args.soil:
             assert data['regional_soil']['texture']=='Franco arcillo arenosa'
         expect(page.locator(".js-plotly-plot").first).to_be_visible(timeout=20000)
@@ -147,7 +179,8 @@ def main():
         download_csv.value.save_as(args.output/"metricas.csv")
         reportid=link.get_attribute("href").split("/")[-2]
         pdf=PdfReader(args.output/"informe.pdf")
-        assert len(pdf.pages)>=3
+        assert len(pdf.pages)>=4
+        assert any("Comparación de tendencias" in p.extract_text() for p in pdf.pages)
         assert any("Recomendaciones basadas en el análisis" in p.extract_text() for p in pdf.pages)
         assert "Informe de rotación agrícola" in pdf.pages[0].extract_text()
         assert "Productor de prueba" in pdf.pages[0].extract_text()
@@ -157,9 +190,21 @@ def main():
         assert float(report_rows[0]["value"])==data["alternatives"][0]["metrics"]["historical"]["deficit_mm"]
         assert client.get(f"/reports/{reportid}/daily").raise_for_status().text.startswith("run_id,scenario_id,rotation_id")
 
+        page.goto(base+f'/lotes/{aid}/analizar')
+        page.get_by_label('Disponibilidad de riego').select_option('rainfed')
+        page.get_by_label('Activar supuestos de ensayo').check()
+        page.get_by_label('Elegir un mes por campaña anual').check()
+        page.get_by_label('Mes de campaña 2',exact=True).select_option('5')
+        page.get_by_role('button',name='Analizar rotaciones',exact=True).click()
+        expect(page.get_by_role('heading',name='Alternativas de rotación')).to_be_visible(timeout=140000)
+        seasonal=client.get('/analyses/'+page.url.split('/')[-1]).raise_for_status().json()
+        assert seasonal['inputs']['plant_months']==[11,5,11]
+        assert [c['month'] for c in seasonal['result']['alternatives'][0]['calendar']]==[11,5,11]
+
         other=httpx.Client(base_url=base+"/api",timeout=20,headers={"Origin":base})
         user=other.post("/auth/register",json={"email":f"other-{key}@example.org","name":"Otra cuenta","password":password}).raise_for_status().json()
         other.headers["X-CSRF-Token"]=user["csrf"]
+        assert all(f['id']!=aid for f in other.get('/field-exposure').raise_for_status().json())
         for path in (f"/fields/{aid}",f"/analyses/{runid}",f"/reports/{reportid}/pdf",f"/reports/{reportid}/csv"):
             assert other.get(path).status_code==404
         assert other.post(f"/fields/{aid}/analyses",json={}).status_code==404
@@ -195,7 +240,12 @@ def main():
         page.goto(base+"/lotes/nuevo")
         canvas=page.locator(".maplibregl-canvas")
         draw=page.get_by_role("button",name="Dibujar terreno")
-        expect(draw).to_be_enabled(timeout=20000)
+        try:
+            expect(draw).to_be_enabled(timeout=30000)
+        except Exception:
+            page.screenshot(path=args.output/'fallo-nuevo-lote.png',full_page=True)
+            print('NEW FIELD FAILURE',page.url,page.locator('body').inner_text(),errors)
+            raise
         draw.click()
         box=canvas.bounding_box()
         verts=[(.37,.40),(.65,.40),(.65,.66),(.37,.66),(.37,.40)]
@@ -228,6 +278,13 @@ def main():
         expect(m.get_by_role("heading",name="Punto GPS emulado")).to_be_visible()
         assert m.evaluate("document.documentElement.scrollWidth===window.innerWidth")
         m.screenshot(path=args.output/"movil.png",full_page=True)
+        m.get_by_role('button',name='Productor',exact=False).click()
+        m.get_by_role('button',name='Ver guía',exact=True).click()
+        walk_tour(m,args.output,'recorrido-movil')
+        m.get_by_role('button',name='Productor',exact=False).click()
+        m.get_by_role('button',name='Ver guía',exact=True).click()
+        m.get_by_role('button',name='Saltar recorrido',exact=True).click()
+        expect(m.get_by_role('dialog')).to_have_count(0)
 
         denied=browser.new_context(viewport={"width":390,"height":844},is_mobile=True,has_touch=True)
         denied.add_init_script("navigator.geolocation.getCurrentPosition = (_, fail) => fail({code:1});")
@@ -243,7 +300,7 @@ def main():
         page.get_by_label("Contraseña").fill(password)
         page.get_by_role("button",name="Iniciar sesión").click()
         expect(page.get_by_role("heading",name="Planifica tu próxima rotación")).to_be_visible()
-        expect(page.get_by_role("heading",name="Primeros pasos")).to_have_count(0)
+        expect(page.get_by_role("dialog")).to_have_count(0)
         assert not errors,errors
         print("Aceptación web/API correcta · piloto, escenarios, PDF, CSV, aislamiento e importaciones")
         print("Análisis",runid,"· Informe",reportid,"· Evidencia",args.output)

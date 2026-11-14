@@ -93,14 +93,18 @@ def recommendation(record, reference, assumed, regional, priority):
                        f"El calendario deja {historic['fallow_days']:.0f} días fuera de cultivo simulado.")
     if "Fabaceae" in record["families"]:
         reasons.append("Las leguminosas pueden fijar nitrógeno con nodulación efectiva. Revisa inoculación, rastrojo y análisis de nutrientes antes de ajustar fertilización.")
-    if "cover" in record["crops"]:
-        reasons.append("La mucuna aporta cobertura y residuos. Valida su terminación para proteger el suelo y gestionar el consumo de agua.")
+    if "cover" in record["crops"] or "cowpea" in record["crops"]:
+        reasons.append("Las leguminosas de cobertura aportan residuos. Valida su terminación para proteger el suelo y gestionar el consumo de agua.")
     if record["diversity"]:
         reasons.append("Alternar familias puede interrumpir ciclos de plagas específicas. Confirma hospedantes y antecedentes sanitarios.")
     if any(code in record["crops"] for code in ("wheat","sunflower","sesame","sorghum","maize")):
         reasons.append("El catálogo incluye raíces profundas en parte de la secuencia. Confirma profundidad útil y capas compactadas; el modelo limita la raíz al perfil declarado.")
     if "sorghum" in record["crops"]:
         reasons.append("Si buscas forraje, confirma cultivar de sorgo, manejo y demanda con el comprador o tu equipo ganadero.")
+    if "cassava" in record["crops"] or "potato" in record["crops"] or "sweetpotato" in record["crops"]:
+        reasons.append("La cosecha de raíces y tubérculos remueve el suelo. Planifica rastrojo, tránsito y cobertura posterior para reducir exposición a lluvia y erosión.")
+    if "potato" in record["crops"] or "tomato" in record["crops"]:
+        reasons.append("Valida la aptitud térmica y altitud para la horticultura de tu zona. Tomate y papa comparten familia y pueden compartir problemas sanitarios.")
     if assumed or regional:
         reasons.append("Verifica retención y profundidad con muestras locales antes de decidir la siembra.")
     return dict(title=title,reasons=reasons,source=NRCS,

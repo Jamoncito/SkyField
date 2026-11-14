@@ -6,6 +6,7 @@ import { TerraDraw, TerraDrawPointMode, TerraDrawPolygonMode, TerraDrawSelectMod
 import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
 import { LocateFixed, MapPin, Pentagon, Pencil, Trash2, Layers, Check } from 'lucide-react';
 import type { Shape } from './types';
+import type { FeatureCollection } from 'geojson';
 import MapSearch, {type Place} from './MapSearch';
 import {downloadMap, OFFLINE_MAP} from './offline';
 import { nasaLayers, nasaTile, NasaControls, type NasaLayer } from './NasaLayers';
@@ -33,7 +34,7 @@ function roundGeometry(geometry:Exclude<Shape,{type:'MultiPolygon'}>):Exclude<Sh
 }
 type Mode = 'point'|'polygon'|'select';
 
-export default function PlotMap({initial,onShape,offline=false}:{initial:Shape|null; onShape:(shape:Shape|null,source:string)=>void;offline?:boolean}) {
+export default function PlotMap({initial,onShape,offline=false,exposure}:{initial:Shape|null; onShape:(shape:Shape|null,source:string)=>void;offline?:boolean;exposure?:FeatureCollection}) {
   const mount = useRef<HTMLDivElement>(null);
   const map = useRef<LibreMap|null>(null);
   const draw = useRef<TerraDraw|null>(null);
@@ -42,7 +43,7 @@ export default function PlotMap({initial,onShape,offline=false}:{initial:Shape|n
   const callback = useRef(onShape);
   callback.current=onShape;
   const [base,setBase]=useState(true);
-  const [useRegional,setRegional]=useState(offline);
+  const [useRegional,setRegional]=useState(offline||!!exposure);
   const [ready,setReady]=useState(false);
   const [mode,setMode]=useState<Mode>('select');
   const [message,setMessage]=useState('');
@@ -83,6 +84,7 @@ export default function PlotMap({initial,onShape,offline=false}:{initial:Shape|n
         polys.forEach(poly=>poly[0].forEach(p=>bounds.extend([p[0],p[1]])));
         instance.fitBounds(bounds,{padding:65,maxZoom:17,duration:0});
       }
+      if(exposure){setReady(true);return;}
       const tools = new TerraDraw({
         adapter:new TerraDrawMapLibreGLAdapter({map:instance,coordinatePrecision:8}),
         modes:[
@@ -119,6 +121,30 @@ export default function PlotMap({initial,onShape,offline=false}:{initial:Shape|n
       instance.remove();map.current=null;
     };
   },[base,useRegional,offline]);
+
+  useEffect(()=>{
+    const instance=map.current;
+    if(!ready||!instance||!exposure)return;
+    const color:maplibregl.ExpressionSpecification=['case',['==',['get','value'],null],'#87998d',
+      ['interpolate',['linear'],['get','value'],0,'#58a583',50,'#efc366',100,'#b75941']];
+    const source=instance.getSource('field-exposure') as maplibregl.GeoJSONSource|undefined;
+    if(source)source.setData(exposure);
+    else{
+      instance.addSource('field-exposure',{type:'geojson',data:exposure});
+      instance.addLayer({id:'exposure-fill',type:'fill',source:'field-exposure',filter:['!=',['geometry-type'],'Point'],paint:{'fill-color':color,'fill-opacity':.7}});
+      instance.addLayer({id:'exposure-point',type:'circle',source:'field-exposure',filter:['==',['geometry-type'],'Point'],paint:{'circle-color':color,'circle-radius':11,'circle-stroke-color':'white','circle-stroke-width':2}});
+      instance.on('click','exposure-point',event=>{
+        const feature=event.features?.[0];if(!feature||feature.geometry.type!=='Point')return;
+        new maplibregl.Popup().setLngLat([feature.geometry.coordinates[0],feature.geometry.coordinates[1]])
+          .setText(String(feature.properties?.description??'')).addTo(instance);
+      });
+    }
+    if(!view.current&&exposure.features.length){
+      const bounds=new maplibregl.LngLatBounds();
+      exposure.features.filter(f=>f.geometry.type==='Point').forEach(f=>{if(f.geometry.type==='Point')bounds.extend([f.geometry.coordinates[0],f.geometry.coordinates[1]]);});
+      if(!bounds.isEmpty())instance.fitBounds(bounds,{padding:65,maxZoom:12,duration:0});
+    }
+  },[ready,exposure]);
 
   useEffect(()=>{
     const instance=map.current;
@@ -199,25 +225,25 @@ export default function PlotMap({initial,onShape,offline=false}:{initial:Shape|n
   }
 
   return <div className="map-card">
-    <MapSearch regional={offline||useRegional} onPlace={p=>preview(p.center,p.name,p.bounds)}
-      onCoordinates={p=>preview(p,'Coordenadas ingresadas')}/>
-    {!offline&&<NasaControls layer={nasa} date={nasaDate} error={nasaError} onDate={setNasaDate}
+    {!exposure&&<MapSearch regional={offline||useRegional} onPlace={p=>preview(p.center,p.name,p.bounds)}
+      onCoordinates={p=>preview(p,'Coordenadas ingresadas')}/>}
+    {!offline&&!exposure&&<NasaControls layer={nasa} date={nasaDate} error={nasaError} onDate={setNasaDate}
       onLayer={value=>{setNasa(value);setNasaDate(value?nasaLayers[value].date:'');setNasaError(false);}}/>}
     <div className="map-stage">
       <div className="map-canvas" ref={mount}/>
-      <div className="map-tools">
+      {!exposure&&<div className="map-tools" data-tour="map-tools">
         <button type="button" className="button map-btn" onClick={locate} disabled={locating}><LocateFixed size={17}/>{locating?'Buscando…':'Ir a mi ubicación'}</button>
         <button type="button" className={'button map-btn '+(mode==='polygon'?'pressed':'')} disabled={!ready} onClick={()=>choose('polygon')}><Pentagon size={16}/> Dibujar terreno</button>
         <button type="button" className={'button icon-btn '+(mode==='point'?'pressed':'')} aria-label="Marcar punto" title="Marcar punto" disabled={!ready} onClick={()=>choose('point')}><MapPin size={17}/></button>
         <button type="button" className="button icon-btn" aria-label="Editar figura" title="Editar figura" disabled={!ready} onClick={()=>choose('select')}><Pencil size={16}/></button>
         <button type="button" className="button icon-btn" aria-label="Borrar figura" title="Borrar figura" disabled={!ready} onClick={()=>{draw.current?.clear();shape.current=null;callback.current(null,'dibujo manual');}}><Trash2 size={16}/></button>
         {!useRegional&&<button type="button" className="button icon-btn" aria-label={base?'Usar fondo local':'Mostrar OpenFreeMap'} title={base?'Usar fondo local':'Mostrar OpenFreeMap'} onClick={()=>{setReady(false);setMode('select');setBase(!base);}}><Layers size={17}/></button>}
-      </div>
+      </div>}
       {!base&&!useRegional&&<span className="map-attribution">Fondo local · Geometría del productor</span>}
     </div>
     {(message||target)&&<div className="map-message" aria-live="polite"><span>{message}{target?.accuracy!==undefined&&<> Precisión estimada ±{Math.round(target.accuracy)} m.</>}</span>
       {target&&<button className="button secondary" type="button" onClick={confirm} disabled={!ready}><Check size={16}/> Confirmar punto</button>}</div>}
-    {!offline&&<div className="offline-tools">
+    {!offline&&!exposure&&<div className="offline-tools" data-tour="offline">
       <button type="button" className="button secondary" aria-pressed={useRegional} onClick={()=>{setReady(false);setTarget(null);setRegional(!useRegional);}}>{useRegional?'Volver al mapa general':'Capa regional de Santa Cruz'}</button>
       <button type="button" className="button secondary" disabled={download==='busy'} onClick={()=>void saveRegional()}>{download==='busy'?'Descargando…':download==='ready'?'Volver a descargar':'Descargar mapa sin conexión'}</button>
       <a href={OFFLINE_MAP} target="_blank" rel="noreferrer">Abrir mapa sin conexión</a>

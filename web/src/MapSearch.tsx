@@ -34,10 +34,10 @@ export default function MapSearch({regional,onPlace,onCoordinates}:{regional:boo
     }
     setError('');onCoordinates([lon,lat]);
   }
-  return <div className="map-search">
+  return <div className="map-search" data-tour="map-search">
     <div className="segments" role="group" aria-label="Buscar ubicación">
       <button type="button" aria-pressed={mode==='place'} onClick={()=>{setMode('place');setError('');}}><Search size={16}/> Lugar</button>
-      <button type="button" aria-pressed={mode==='coords'} onClick={()=>{setMode('coords');setError('');}}>Coordenadas</button>
+      <button type="button" data-tour="coordinates" aria-pressed={mode==='coords'} onClick={()=>{setMode('coords');setError('');}}>Coordenadas</button>
     </div>
     {mode==='place'?<div className="place-search">
       <label>Provincia, municipio o departamento<input type="search" value={query} onChange={e=>setQuery(e.target.value)}

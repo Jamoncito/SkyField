@@ -10,6 +10,7 @@ from jupiter.jobs import JobError
 from jupiter.model import CROPS, et0, project, sequences, simulate_window, water_day
 from jupiter.report import clean
 from jupiter.soil import retention_at_depth, texture
+from jupiter.signals import environmental_signals, simulation_timeline, trend
 
 
 def test_verified_pilot_csv_across_chunks():
@@ -83,14 +84,42 @@ def test_soil_texture_and_depth_weighted_retention():
     assert retention_at_depth(profile,.10) is None
 
 
-def test_batched_balance_matches_individual_traces():
+@pytest.mark.parametrize("months",[None,[11,5,11]])
+def test_batched_balance_matches_individual_traces(months):
     from datetime import timedelta
 
     start = date(2020,11,1)
     rows = [(dict(date=start+timedelta(days=d),tmin_c=-1 if d%4 else 14,tmax_c=36),4.6,(d%9)*1.9)
             for d in range(1095)]
     choices = [("a",("bean","maize","sesame")),("b",("maize","cover","sorghum"))]
-    inputs = dict(plant_month=11,irrigation="confirmed",irrigation_mm=2,warming_c=1)
+    inputs = dict(plant_month=11,plant_months=months,irrigation="confirmed",irrigation_mm=2,warming_c=1)
     profile = dict(theta_fc=.29,theta_wp=.14,depth_m=.85)
     expected = [project(rows,2020,seq,inputs,profile,"sensitivity",trace=True)[0] for _,seq in choices]
     assert simulate_window(rows,2020,choices,inputs,profile,"sensitivity") == expected
+
+
+def test_campaign_calendars_filter_windows_and_overlap():
+    inputs=dict(plant_month=11,plant_months=[11,5,11],soil_ph=None,soil_ec=None,previous="unknown",
+                allowed_crops=["soy","wheat","sesame","sunflower"])
+    choices,_,_=sequences(inputs)
+    assert ("soy","wheat","sesame") in choices
+    assert all(seq[1] in ("wheat","sunflower") for seq in choices)
+    inputs.update(plant_months=[12,1,11],allowed_crops=["cassava","soy","sesame"])
+    assert sequences(inputs)[0]==[]
+
+
+def test_monthly_alignment_keeps_missing_values_and_trace_totals():
+    from datetime import timedelta
+    rows=[dict(date=date(2020,1,1)+timedelta(days=d),tmean_c=26,tmin_c=20,tmax_c=32,rh_pct=70,
+               wind2m_ms=2,solar_mj_m2_day=20,precip_mm_day=2) for d in range(31)]
+    result=environmental_signals(rows,{"support":"test"},{"lat":-17},250,None)
+    assert result["monthly"][0]["rain_mm"]==62
+    assert result["monthly"][0]["anomaly"] is None
+    rows[2]["precip_mm_day"]=None
+    assert environmental_signals(rows,{"support":"test"},{"lat":-17},None,None)["monthly"][0]["rain_mm"] is None
+    daily={"historical":[["2020-01-01","soy",2,3,4,2,2,0,1],
+                          ["2020-01-02","fallow",0,3,1,1,0,0,0]]}
+    timeline=simulation_timeline(daily)["historical"][0]
+    assert timeline["deficit_mm"]==2 and timeline["fallow_days"]==1 and timeline["stress_days"]==1
+    slopes=trend([(year,2*(year-2010)) for year in range(2010,2020)],"test","unit")
+    assert slopes["ols_decade"]==slopes["sen_decade"]==20 and slopes["r2"]==1

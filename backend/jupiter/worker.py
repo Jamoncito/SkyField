@@ -10,7 +10,9 @@ from .climate import (chunks, copy_rows, get_power, ingest_climate, inspect, kee
 from .db import STORAGE, engine, many, one, query
 from .jobs import JobError, LeaseLost, claim, complete, fail, guard, renew
 from .model import CROPS, run_model
+from .catalog import CONTEXT
 from .evidence import moisture
+from .signals import environmental_signals, simulation_timeline
 from .report import render
 from .storage import persist, restore
 
@@ -39,7 +41,7 @@ def stage_profile(conn, path, item):
                             raise ValueError()
                         if row["variable"] != "texture" and not math.isfinite(float(row["value"])):
                             raise ValueError()
-                    elif (row["crop_code"] not in CROPS or len(row["cultivar"]) > 100 or
+                    elif (row["crop_code"] not in CROPS.keys() | CONTEXT.keys() or len(row["cultivar"]) > 100 or
                           parse_date(row["planting_date"]) >= parse_date(row["harvest_date"])):
                         raise ValueError()
                     yield count+1,json.dumps(row)
@@ -133,6 +135,9 @@ def do_analysis(job, progress):
     output, daily = run_model(rows,dataset["metadata"],site,run["inputs"],run["inputs"].get("regional_soil"))
     progress(82)
     output["moisture"] = moisture(site["lon"],site["lat"])
+    output["environment"] = environmental_signals(rows,dataset["metadata"],site,output["elevation_m"],output["moisture"])
+    for option in output["alternatives"]:
+        option["timeline"] = simulation_timeline(daily[option["id"]])
     output.update(dataset_id=str(dataset["id"]),soil=soil,campaigns=campaigns)
     with engine.begin() as conn:
         guard(conn,job)

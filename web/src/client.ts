@@ -11,14 +11,17 @@ export async function api<T>(path:string, opts:RequestInit = {}):Promise<T> {
   if (opts.body && !(opts.body instanceof FormData)) headers.set('Content-Type','application/json');
   if (opts.method && opts.method !== 'GET' && csrf) headers.set('X-CSRF-Token',csrf);
   let response:Response;
-  try { response = await fetch('/api'+path,{...opts,headers}); }
+  const timeout=new AbortController();
+  const timer=window.setTimeout(()=>timeout.abort(),90000);
+  try { response = await fetch('/api'+path,{...opts,headers,signal:opts.signal??timeout.signal}); }
   catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') throw err;
-    throw new Error('No se pudo conectar. Comprueba que Júpiter Jr está en ejecución.');
-  }
+    if (opts.signal?.aborted) throw err;
+    throw new Error('La conexión tardó demasiado o se interrumpió. Espera un momento y vuelve a intentar.');
+  } finally {clearTimeout(timer);}
   if (!response.ok) {
     const result = await response.json().catch(()=>({}));
-    throw new ApiError(typeof result.detail === 'string' ? result.detail : 'No pudimos completar la solicitud.',response.status);
+    throw new ApiError(typeof result.detail === 'string' ? result.detail : response.status>=500?
+      'El servicio se está iniciando o está temporalmente ocupado. Vuelve a intentar en un momento.':'No pudimos completar la solicitud.',response.status);
   }
   return (response.status===204 ? undefined : await response.json()) as T;
 }
