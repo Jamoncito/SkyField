@@ -155,6 +155,7 @@ def daily_rows(path, header, factor, size=None):
             yield (when, *vals, "incomplete" if None in vals else "ok")
 
 def keep_file(conn, owner, path):
+    from .storage import persist
     digest = sha(path)
     key = f"originals/{owner}/{digest}.csv"
     dest = STORAGE / key
@@ -169,6 +170,7 @@ def keep_file(conn, owner, path):
     row = one(conn, """INSERT INTO data_files(owner,storage_key,sha256,bytes) VALUES(:o,:k,:s,:b)
         ON CONFLICT(owner,sha256) DO UPDATE SET sha256=excluded.sha256 RETURNING *""",
               o=owner, k=key, s=digest, b=path.stat().st_size)
+    persist(conn, owner, key)
     return dict(row)
 
 def copy_rows(conn, table, columns, rows):

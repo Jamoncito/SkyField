@@ -26,7 +26,7 @@ def embed(data, media="image/png"):
     return f"data:{media};base64,"+base64.b64encode(data).decode()
 
 def map_figure(site):
-    if os.getenv("JUPITER_WINDOWS_PORTABLE") == "1":
+    if os.getenv("JUPITER_WINDOWS_PORTABLE") == "1" or os.getenv("LOW_MEMORY") == "1":
         return portable_map(site)
     import matplotlib
     matplotlib.use("Agg")

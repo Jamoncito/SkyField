@@ -324,7 +324,9 @@ def download(report_id: UUID, format: str, user=Depends(read_user)):
     if format not in files or not item["artifact_key"]:
         raise HTTPException(404, "El archivo aún no está disponible.")
     source, media = files[format]
-    path = STORAGE / item["artifact_key"] / source
+    from .storage import restore
+    with engine.connect() as conn:
+        path = restore(conn, user["id"], item["artifact_key"] + "/" + source)
     if not path.is_file():
         raise HTTPException(404, "El archivo no está disponible en el almacenamiento.")
     return FileResponse(path, media_type=media, filename=f"jupiter-{str(report_id)[:8]}-{source}")

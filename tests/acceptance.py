@@ -78,6 +78,19 @@ def main():
         assert len(data["alternatives"])==3 and data["alternatives"][0]["metrics"]["historical"]["deficit_mm"]>0
         expect(page.locator(".js-plotly-plot").first).to_be_visible(timeout=20000)
         page.screenshot(path=args.output/"comparacion.png",full_page=True)
+        for width in (360, 390, 768, 1440):
+            page.set_viewport_size({"width": width, "height": 900})
+            try:
+                page.wait_for_function("document.documentElement.scrollWidth === window.innerWidth", timeout=5000)
+            except Exception:
+                page.screenshot(path=args.output/f"overflow-{width}.png",full_page=True)
+                overflow = page.evaluate("""() => [...document.querySelectorAll('main *')]
+                    .filter(el => el.getBoundingClientRect().right > innerWidth + 1)
+                    .map(el => ({tag:el.tagName,classes:el.className,width:el.getBoundingClientRect().width,
+                                 text:el.textContent.slice(0,100)})).slice(0,20)""")
+                raise AssertionError((width,overflow))
+            if width == 390:
+                page.screenshot(path=args.output/"comparacion-movil.png",full_page=True)
         page.get_by_role("button",name="Sensibilidad",exact=True).click()
         expect(page.get_by_text("Hipótesis",exact=False)).to_be_visible()
 

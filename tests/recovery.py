@@ -15,6 +15,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--base",default="http://localhost:8080")
     parser.add_argument("--windows-worker",action="store_true")
+    parser.add_argument("--ephemeral-files",action="store_true")
     args=parser.parse_args()
     client=httpx.Client(base_url=args.base+"/api",timeout=15,headers={"Origin":args.base})
     password=secrets.token_urlsafe(18)
@@ -50,6 +51,19 @@ def main():
     wait_job(client,report,timeout=90)
     pdf=f"/reports/{report['target_id']}/pdf"
     before=client.get(pdf).raise_for_status().content
+    if args.ephemeral_files:
+        from jupiter.db import STORAGE
+        with engine.connect() as conn:
+            record=one(conn,"SELECT artifact_key,owner FROM reports WHERE id=:i",i=report["target_id"])
+            for filename in ("report.pdf","metrics.csv","daily.csv"):
+                key=record["artifact_key"]+"/"+filename
+                assert one(conn,"SELECT storage_key FROM stored_files WHERE storage_key=:k AND owner=:o",
+                           k=key,o=record["owner"])
+                path=(STORAGE/key).resolve()
+                assert path.is_relative_to(STORAGE.resolve())
+                path.unlink()
+        assert client.get(f"/reports/{report['target_id']}/csv").status_code==200
+        assert client.get(f"/reports/{report['target_id']}/daily").status_code==200
     if args.windows_worker:
         subprocess.run([shell,"-NoProfile","-File","scripts/stop-windows.ps1"],check=True)
         subprocess.run([shell,"-NoProfile","-File","scripts/start-windows.ps1"],check=True)

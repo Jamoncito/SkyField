@@ -11,6 +11,7 @@ from .db import STORAGE, engine, many, one, query
 from .jobs import JobError, LeaseLost, claim, complete, fail, guard, renew
 from .model import CROPS, run_model
 from .report import render
+from .storage import persist, restore
 
 LOG = logging.getLogger("jupiter.worker")
 
@@ -82,7 +83,7 @@ def do_import(job):
             FROM imports i JOIN field_versions f ON f.field_id=i.field_id AND f.version=i.field_version
             JOIN data_files d ON d.id=i.file_id WHERE i.id=:id
         """, id=job["target"])
-        path = STORAGE / item["storage_key"]
+        path = restore(conn, item["owner"], item["storage_key"])
         if item["kind"] == "climate":
             dataset = ingest_climate(conn,path,{"sha256":item["sha256"], "id":item["file_id"], "created":item["created"]},
                                      item["snapshot"]["lon"],item["snapshot"]["lat"],item["field_id"])
@@ -149,6 +150,8 @@ def do_report(job, progress):
     try:
         with engine.begin() as conn:
             guard(conn,job)
+            for filename in ("report.pdf", "metrics.csv", "daily.csv"):
+                persist(conn, item["owner"], artifact + "/" + filename)
             query(conn,"""UPDATE reports SET artifact_key=:a,sha_pdf=:pdf,sha_csv=:csv,sha_daily=:daily
                 WHERE id=:i""",a=artifact,i=item["id"],**hashes)
             complete(conn,job)
