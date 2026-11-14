@@ -29,7 +29,8 @@ def main():
         worker_pid=int(Path(".local/worker.pid").read_text())
         subprocess.run(["taskkill","/F","/PID",str(worker_pid)],capture_output=True,check=True)
     try:
-        task=client.post(f"/fields/{site['id']}/analyses",json={"previous":"maize","irrigation":"rainfed","priority":"water","trial":True}).raise_for_status().json()
+        task=client.post(f"/fields/{site['id']}/analyses",json={"previous":"maize","irrigation":"rainfed","priority":"water","trial":True,
+            "allowed_crops":["maize","cover","sorghum","soy"]}).raise_for_status().json()
         if args.windows_worker:
             # Model the state left by a worker terminated after acquiring a lease.
             with engine.begin() as conn:

@@ -7,8 +7,9 @@ from fastapi import HTTPException
 from jupiter.climate import PILOT, PILOT_CSV, PILOT_SHA, check_power, daily_rows, inspect, sha, source_key
 from jupiter.geometry import validate_geometry
 from jupiter.jobs import JobError
-from jupiter.model import CROPS, et0, sequences, water_day
+from jupiter.model import CROPS, et0, project, sequences, simulate_window, water_day
 from jupiter.report import clean
+from jupiter.soil import retention_at_depth, texture
 
 
 def test_verified_pilot_csv_across_chunks():
@@ -69,3 +70,27 @@ def test_geometry_and_safe_csv_cells():
         validate_geometry(dict(type="Polygon",coordinates=[[[-63,-17],[-63.01,-17],[-63.01,-17.01],[-62,-18]]]))
     assert clean("  =1+1") == "'  =1+1"
     assert clean(-3.4) == -3.4
+
+
+def test_soil_texture_and_depth_weighted_retention():
+    assert texture(50.1,18.5,31.3) == "Franco arcillo arenosa"
+    assert texture(10,10,10) is None
+    profile = {"retention":[{"from_cm":0,"to_cm":5,"fc":.23,"wp":.11},
+                            {"from_cm":5,"to_cm":15,"fc":.35,"wp":.17}]}
+    assert retention_at_depth(profile,.10) == pytest.approx({"theta_fc":.29,"theta_wp":.14})
+    assert retention_at_depth(profile,.2) is None
+    profile["retention"][1]["wp"] = None
+    assert retention_at_depth(profile,.10) is None
+
+
+def test_batched_balance_matches_individual_traces():
+    from datetime import timedelta
+
+    start = date(2020,11,1)
+    rows = [(dict(date=start+timedelta(days=d),tmin_c=-1 if d%4 else 14,tmax_c=36),4.6,(d%9)*1.9)
+            for d in range(1095)]
+    choices = [("a",("bean","maize","sesame")),("b",("maize","cover","sorghum"))]
+    inputs = dict(plant_month=11,irrigation="confirmed",irrigation_mm=2,warming_c=1)
+    profile = dict(theta_fc=.29,theta_wp=.14,depth_m=.85)
+    expected = [project(rows,2020,seq,inputs,profile,"sensitivity",trace=True)[0] for _,seq in choices]
+    assert simulate_window(rows,2020,choices,inputs,profile,"sensitivity") == expected

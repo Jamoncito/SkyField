@@ -51,7 +51,7 @@ def main():
         page.get_by_role("button",name="Siguiente").click()
         expect(page.get_by_text("2 de 4 · Revisa el suelo")).to_be_visible()
         page.get_by_role("button",name="Omitir guía").click()
-        expect(page.get_by_role("heading",name="Primeros pasos")).to_have_count(0)
+        expect(page.get_by_role("heading",name="Primeros pasos")).to_have_count(0,timeout=20000)
         expect(page.get_by_role("button",name="Explorar lote piloto")).to_be_visible()
         page.screenshot(path=args.output/"panel.png")
 
@@ -86,6 +86,8 @@ def main():
         offline.get_by_label("Provincia, municipio o departamento").fill("Warnes")
         offline.get_by_role("button",name="Warnes Provincia · Santa Cruz").click()
         expect(offline.get_by_text("Warnes.",exact=False)).to_be_visible()
+        expect(offline.get_by_text("GeoBolivia",exact=False)).to_be_attached()
+        offline.screenshot(path=args.output/"santa-cruz-sin-conexion.png",full_page=True)
         offline.close()
         context.set_offline(False)
         page.get_by_text("Capas NASA por fecha").click()

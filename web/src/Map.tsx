@@ -16,7 +16,7 @@ maplibregl.setWorkerUrl(workerUrl);
 const PILOT:[number,number] = [-63.272578418,-17.182537861];
 const local:StyleSpecification={version:8,sources:{},layers:[{id:'solid',type:'background',paint:{'background-color':'#e4ecdf'}}]};
 const remote = import.meta.env.VITE_MAP_STYLE || 'https://tiles.openfreemap.org/styles/liberty';
-const regionalBounds:[number,number,number,number]=[-64.7,-21.0,-57.3,-13.3];
+const regionalBounds:[number,number,number,number]=[-65.0,-20.7,-57.2,-13.2];
 const regional:StyleSpecification={version:8,sources:{regional:{type:'geojson',data:'/regional/santa-cruz.geojson',
   attribution:'GeoBolivia / <a href="https://www.geoboundaries.org/">geoBoundaries</a> · límites simplificados'}},layers:[
   ...local.layers,
@@ -161,6 +161,7 @@ export default function PlotMap({initial,onShape,offline=false}:{initial:Shape|n
   function choose(next:Mode) {
     if(!draw.current)return;
     if(next!=='select') {
+      gpsMarker.current?.remove();setTarget(null);
       draw.current.clear();
       shape.current=null;
       callback.current(null,'dibujo manual');

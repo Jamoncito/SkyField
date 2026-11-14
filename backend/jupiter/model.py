@@ -201,6 +201,66 @@ def windows(rows, inputs, elevation, latitude):
             yield scenario, year, [(rows[i],float(demands[i]), rows[i]["precip_mm_day"]*(1+rain_shift/100))
                                    for i in selected]
 
+
+def simulate_window(rows, year, choices, inputs, profile, scenario):
+    """Evaluate the daily recurrence for all rotations in parallel within one window."""
+    planting = [date(year+i, inputs["plant_month"], 1) for i in range(3)]
+    codes = list(CROPS)
+    index = {code:i for i,code in enumerate(codes)}
+    paths = np.array([[index[code] for code in seq] for _,seq in choices])
+    max_duration = max(sum(c["days"]) for c in CROPS.values())
+    growth_table = np.array([[growth(c,d) if d < sum(c["days"]) else (.20,.20,0.)
+                              for d in range(max_duration+1)] for c in CROPS.values()])
+    depletion = np.array([c["p"] for c in CROPS.values()])
+    duration = np.array([sum(c["days"]) for c in CROPS.values()])
+    full_depth = profile["depth_m"]
+    capacity = (profile["theta_fc"]-profile["theta_wp"])*1000
+    root_water = np.full(len(choices), .5*capacity*full_depth)
+    deep_water = np.zeros(len(choices))
+    prev_depth = np.full(len(choices), full_depth)
+    deficit, cover, irrigation, stress, frost, heat, fallow = np.zeros((7,len(choices)))
+    max_irrigation = (inputs["irrigation_mm"] or 0) if inputs["irrigation"] == "confirmed" else 0
+    warming = inputs["warming_c"] if scenario == "sensitivity" else 0
+    season = 0
+    for row, reference, rain in rows:
+        day = row["date"]
+        if season < 2 and day >= planting[season+1]:
+            season += 1
+        crops = paths[:,season]
+        age = (day-planting[season]).days
+        growing = age < duration[crops]
+        kc, root, canopy = growth_table[crops,min(age,max_duration)].T
+        depth = np.minimum(root,full_depth)
+        delta = depth-prev_depth
+        gained = np.divide(deep_water*delta,full_depth-prev_depth,out=np.zeros_like(root_water),where=delta>0)
+        transfer = np.where(delta < 0, root_water*delta/prev_depth, gained)
+        root_water += transfer
+        deep_water -= transfer
+        taw = capacity*depth
+        remaining = taw - depletion[crops]*taw
+        infiltrated = rain - .10*rain
+        applied = np.minimum(max_irrigation*growing,np.maximum(0,remaining-root_water-infiltrated))
+        available = root_water+infiltrated+applied
+        drainage = np.maximum(0,available-taw)
+        usable = np.minimum(taw,available)
+        demand = reference*kc
+        actual = np.minimum(usable,demand*np.minimum(1,usable/np.maximum(remaining,.000001)))
+        deep_water += np.minimum(np.maximum(0,capacity*(full_depth-depth)-deep_water),drainage)
+        root_water,prev_depth = usable-actual,depth
+        gap = np.where(growing,np.maximum(0,demand-actual),0.)
+        deficit += gap
+        stress += gap > .1
+        irrigation += applied
+        cover += canopy
+        frost += growing & (row["tmin_c"]+warming <= 0)
+        heat += growing & (row["tmax_c"]+warming >= 35)
+        fallow += ~growing
+    return [dict(scenario=scenario,year=year,deficit_mm=round(float(d),2),stress_days=int(s),
+                 cover_pct=round(float(c)*100/len(rows),2),irrigation_mm=round(float(i),2),
+                 frost_days=int(f),hot_days=int(h),fallow_days=int(b))
+            for d,s,c,i,f,h,b in zip(deficit,stress,cover,irrigation,frost,heat,fallow)]
+
+
 def run_model(rows, source, site, inputs, soil_profile=None):
     patterns, excluded, baseline = sequences(inputs)
     profile = {k: inputs[k] for k in ["theta_fc","theta_wp","depth_m"]}
@@ -211,7 +271,7 @@ def run_model(rows, source, site, inputs, soil_profile=None):
         profile.update(regional)
     missing = [label for key,label in [("theta_fc","capacidad de campo"),("theta_wp","punto de marchitez"),
                                        ("depth_m","profundidad útil"),("soil_ph","pH"),("soil_ec","conductividad eléctrica")]
-               if inputs[key] is None]
+               if inputs[key] is None and not (soil_used and key in ("theta_fc", "theta_wp"))]
     if inputs["previous"] == "unknown":
         missing.append("cultivo anterior")
     if inputs["irrigation"] == "unknown":
@@ -242,14 +302,16 @@ def run_model(rows, source, site, inputs, soil_profile=None):
     choices = [(f"rotation-{'-'.join(seq)}", seq) for seq in patterns]
     if baseline:
         choices.append(("reference",baseline))
-    for rotation_id, seq in choices:
+    samples = {case:[] for case in ("historical","sensitivity")}
+    if choices:
+        for case,year,data in candidates:
+            samples[case].append(simulate_window(data,year,choices,inputs,profile,case))
+    for order,(rotation_id,seq) in enumerate(choices):
         families = [CROPS[x]["family"] for x in seq]
         diversity = sum(a!=b for a,b in zip(families,families[1:]))/2
         metrics = {}
         for scenario in ("historical","sensitivity"):
-            simulations = [project(data,year,seq,inputs,profile,scenario)
-                           for case,year,data in candidates if case==scenario]
-            values = [item[0] for item in simulations]
+            values = [window[order] for window in samples[scenario]]
             metrics[scenario] = {k:round(float(np.mean([v[k] for v in values])),2) if values else None
                                  for k in ("deficit_mm","stress_days","cover_pct","irrigation_mm","frost_days","hot_days","fallow_days")}
             metrics[scenario]["windows"] = [v["year"] for v in values]
