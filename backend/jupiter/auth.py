@@ -42,7 +42,7 @@ def digest(token):
 def session(conn, request, required=True):
     token = request.cookies.get(COOKIE, "")
     row = one(conn, """
-      SELECT u.id,u.name,u.email,s.csrf FROM sessions s JOIN users u ON u.id=s.user_id
+      SELECT u.id,u.name,u.email,u.guide_seen,s.csrf FROM sessions s JOIN users u ON u.id=s.user_id
       WHERE token_hash=:h AND revoked IS NULL AND expires>now()
     """, h=digest(token)) if token else None
     if required and not row:

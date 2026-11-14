@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from jupiter.climate import PILOT, PILOT_CSV, PILOT_SHA, check_power, daily_rows, inspect, sha, source_key
 from jupiter.geometry import validate_geometry
 from jupiter.jobs import JobError
-from jupiter.model import et0, sequences, water_day
+from jupiter.model import CROPS, et0, sequences, water_day
 from jupiter.report import clean
 
 
@@ -58,7 +58,7 @@ def test_et0_and_calendar_constraints():
     import numpy as np
     assert np.isnan(et0([row],-17.18,251)[0])
     variants,excluded,_=sequences(dict(plant_month=3,soil_ph=None,soil_ec=None,previous="unknown"))
-    assert len(excluded)==4 and not variants
+    assert set(excluded)=={c['name'] for c in CROPS.values()} and not variants
 
 
 def test_geometry_and_safe_csv_cells():

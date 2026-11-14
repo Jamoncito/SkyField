@@ -1,10 +1,21 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, ChevronDown, CloudSun, FileText, Globe2,
   LayoutDashboard, Leaf, LogOut, MapPin, Menu, Plus, Sprout, X } from 'lucide-react';
 import { api,day,errorText,n,post,session,ApiError } from './client';
 import type { Report, RunSummary, Site, User } from './types';
 import { FieldEditor } from './FieldEditor';
 import { Compare } from './Compare';
+import { OFFLINE_MAP } from './offline';
+
+const RegionalMap=lazy(()=>import('./Map'));
+
+function OfflineMap(){
+  return <main className="main offline-page"><Brand/><h1>Mapa sin conexión de Santa Cruz</h1>
+    <p>Límites de provincias y referencias municipales. Busca un lugar, consulta coordenadas o dibuja para orientarte.</p>
+    <p className="muted">Para guardar lotes, consultar suelo o ejecutar análisis, vuelve al <a href="/">panel en línea</a>.</p>
+    <Suspense fallback={<p>Cargando mapa…</p>}><RegionalMap initial={null} offline onShape={()=>{}}/></Suspense>
+  </main>;
+}
 
 function useLocation() {
   const [path,setPath] = useState(window.location.pathname);
@@ -85,11 +96,34 @@ function SiteRow({site,go}:{site:Site;go:Go}) {
     {site.pilot&&<span className="chip">Piloto</span>}<ArrowRight className="site-arrow" size={17}/></button>;
 }
 
-export function App() {
+export function App(){return window.location.pathname===OFFLINE_MAP?<OfflineMap/>:<Workspace/>;}
+
+const guide=[
+  ['Ubica tu terreno','En Mis lotes, busca una provincia o municipio, ingresa coordenadas o dibuja el perímetro. Para practicar, abre el lote piloto.'],
+  ['Revisa el suelo','Abre el perfil de suelo para consultar estimaciones regionales. Si tienes datos de laboratorio, introdúcelos en el análisis.'],
+  ['Compara tres campañas','Elige el mes de siembra, riego, cultivos disponibles y tu prioridad. Revisa el histórico y cómo cambia el déficit bajo otro escenario.'],
+  ['Guarda la evidencia','Descarga el informe con las razones, las fuentes y los datos que faltan verificar con tu equipo agronómico.'],
+];
+
+function Guide({dismiss}:{dismiss:()=>Promise<void>}){
+  const [step,setStep]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  async function finish(){setBusy(true);try{await dismiss();}catch(e){setError(errorText(e));}finally{setBusy(false);}}
+  return <section className="card panel onboarding" aria-label="Guía de bienvenida">
+    <div className="section-head"><div><h2>Primeros pasos</h2><p aria-live="polite">{step+1} de {guide.length} · {guide[step][0]}</p></div>
+      <button className="text-button" onClick={()=>void finish()} disabled={busy}>Omitir guía</button></div>
+    <p>{guide[step][1]}</p>
+    {error&&<p role="alert" className="error">{error}</p>}
+    <div className="button-row">{step>0&&<button className="button secondary" onClick={()=>setStep(step-1)}>Anterior</button>}
+      <button className="button primary" disabled={busy} onClick={()=>step+1<guide.length?setStep(step+1):void finish()}>{step+1<guide.length?'Siguiente':'Terminar guía'}<ArrowRight size={16}/></button></div>
+  </section>;
+}
+
+function Workspace() {
   const {path,go}=useLocation();
   const [user,setUser]=useState<User|null>(),[initialError,setInitialError]=useState('');
   const [sites,setSites]=useState<Site[]>([]),[runs,setRuns]=useState<RunSummary[]>([]),[reports,setReports]=useState<Report[]>([]);
   const [error,setError]=useState(''),[menu,setMenu]=useState(false),[profile,setProfile]=useState(false);
+  const [showGuide,setShowGuide]=useState(false);
   function signed(u:User|null){session(u);setUser(u);}
   function loadUser(){setInitialError('');void api<User>('/me').then(signed).catch(err=>{
     if(err instanceof ApiError&&err.status===401)signed(null);else setInitialError(errorText(err));});}
@@ -134,11 +168,13 @@ export function App() {
         <div className="breadcrumb"><button className="icon-btn mobile-menu" aria-label="Abrir menú" onClick={()=>setMenu(!menu)}>{menu?<X size={20}/>:<Menu size={20}/>}</button>
           <span className="crumb-home">Espacio de trabajo</span><span className="slash">/</span><strong>{title}</strong></div>
         <div className="profile-wrap"><button className="profile" aria-expanded={profile} onClick={()=>setProfile(!profile)}><span className="avatar">{user.name[0].toUpperCase()}</span><b>{firstName}</b><ChevronDown size={14}/></button>
-          {profile&&<div className="profile-menu card"><b>{user.name}</b><small>{user.email}</small><button className="button secondary" onClick={close}><LogOut size={16}/> Cerrar sesión</button></div>}</div>
+          {profile&&<div className="profile-menu card"><b>{user.name}</b><small>{user.email}</small><button className="button secondary" onClick={()=>{route('/');setShowGuide(true);}}>Ver guía</button><button className="button secondary" onClick={close}><LogOut size={16}/> Cerrar sesión</button></div>}</div>
       </header>
       <main className="main">
         {error&&<div className="error" role="alert">{error} <button className="text-button" onClick={refresh}>Reintentar</button></div>}
-        {section===''&&<Dashboard user={user} sites={sites} runs={runs} reports={reports} go={route}/>}
+        {section===''&&<>{(!user.guide_seen||showGuide)&&<Guide key={user.id} dismiss={async()=>{
+          if(!user.guide_seen){await post('/me/guide');setUser({...user,guide_seen:true});}setShowGuide(false);
+        }}/>}<Dashboard user={user} sites={sites} runs={runs} reports={reports} go={route}/></>}
         {section==='lotes'&&!parts[1]&&<><div className="page-heading"><div><h1>Mis lotes</h1><p>Dibuja tu terreno o guarda un punto de consulta exploratorio.</p></div><button className="button primary" onClick={()=>route('/lotes/nuevo')}><Plus size={18}/> Nuevo lote</button></div>
           <section className="card panel">{sites.length?sites.map(s=><SiteRow site={s} go={route} key={s.id}/>):<p className="muted">Todavía no hay lotes guardados.</p>}</section></>}
         {section==='lotes'&&parts[1]&&<FieldEditor key={parts[1]} id={parts[1]==='nuevo'?null:parts[1]} analyzing={parts[2]==='analizar'} go={route} refresh={refresh}/>}

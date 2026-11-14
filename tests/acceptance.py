@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--base",default="http://localhost:8080")
     parser.add_argument("--channel",default=None)
     parser.add_argument("--output",type=Path,default=Path(".local/evidence"))
+    parser.add_argument("--soil",action="store_true",help="Also verify a live SoilGrids profile")
     args=parser.parse_args()
     args.output.mkdir(parents=True,exist_ok=True)
     base=args.base
@@ -46,6 +47,11 @@ def main():
         page.get_by_label("Contraseña").fill(password)
         page.get_by_role("button",name="Crear cuenta").click()
         expect(page.get_by_role("heading",name="Planifica tu próxima rotación")).to_be_visible(timeout=20000)
+        expect(page.get_by_role("heading",name="Primeros pasos")).to_be_visible()
+        page.get_by_role("button",name="Siguiente").click()
+        expect(page.get_by_text("2 de 4 · Revisa el suelo")).to_be_visible()
+        page.get_by_role("button",name="Omitir guía").click()
+        expect(page.get_by_role("heading",name="Primeros pasos")).to_have_count(0)
         expect(page.get_by_role("button",name="Explorar lote piloto")).to_be_visible()
         page.screenshot(path=args.output/"panel.png")
 
@@ -62,13 +68,43 @@ def main():
         expect(page.get_by_role("heading",name="Ubicación del lote")).to_be_visible()
         expect(page.get_by_role("button",name="Mostrar OpenFreeMap")).to_be_visible(timeout=20000)
         expect(page.get_by_role("button",name="Dibujar terreno")).to_be_enabled(timeout=20000)
+        page.get_by_label("Provincia, municipio o departamento").fill("Chiquitos")
+        page.get_by_role("button",name="Chiquitos Provincia · Santa Cruz").click()
+        expect(page.get_by_role("button",name="Confirmar punto")).to_be_visible()
+        page.get_by_role("button",name="Coordenadas").click()
+        page.get_by_label("Latitud",exact=True).fill("-17,182538")
+        page.get_by_label("Longitud",exact=True).fill("-63,272578")
+        page.get_by_role("button",name="Ubicar",exact=True).click()
+        expect(page.get_by_text("Coordenadas ingresadas.",exact=False)).to_be_visible()
+        page.get_by_role("button",name="Descargar mapa sin conexión").click()
+        expect(page.get_by_text("Mapa de Santa Cruz guardado",exact=False)).to_be_visible(timeout=100000)
+        context.set_offline(True)
+        offline=context.new_page()
+        offline.goto(base+"/mapa-sin-conexion")
+        expect(offline.get_by_role("heading",name="Mapa sin conexión de Santa Cruz")).to_be_visible()
+        expect(offline.get_by_role("button",name="Dibujar terreno")).to_be_enabled(timeout=20000)
+        offline.get_by_label("Provincia, municipio o departamento").fill("Warnes")
+        offline.get_by_role("button",name="Warnes Provincia · Santa Cruz").click()
+        expect(offline.get_by_text("Warnes.",exact=False)).to_be_visible()
+        offline.close()
+        context.set_offline(False)
+        page.get_by_text("Capas NASA por fecha").click()
+        with page.expect_response(lambda r:"MODIS_Terra_L3_NDVI_Monthly" in r.url and r.ok, timeout=45000):
+            page.get_by_label("Variable NASA",exact=True).select_option("ndvi")
+        page.get_by_label("Variable NASA",exact=True).select_option("")
+        page.get_by_text("Capas NASA por fecha").click()
+        if args.soil:
+            page.get_by_role("button",name="Consultar suelo",exact=True).click()
+            expect(page.get_by_text("Franco arcillo arenosa",exact=True)).to_be_visible(timeout=100000)
+            soil=client.get(f"/fields/{aid}/soil-profile").raise_for_status().json()
+            assert soil["ph_interval"] and soil["surface"]["sand"]>0
         page.screenshot(path=args.output/"lote.png")
         page.get_by_role("button",name="Analizar",exact=True).click()
         page.get_by_label("Cultivo anterior").select_option("maize")
         page.get_by_label("Disponibilidad de riego").select_option("rainfed")
         page.get_by_label("Activar supuestos de ensayo").check()
         page.get_by_role("button",name="Analizar rotaciones").click()
-        expect(page.get_by_role("heading",name="Alternativas de rotación")).to_be_visible(timeout=75000)
+        expect(page.get_by_role("heading",name="Alternativas de rotación")).to_be_visible(timeout=140000)
         runid=page.url.rstrip("/").split("/")[-1]
         data=client.get("/analyses/"+runid).raise_for_status().json()["result"]
         assert data["source"]["rows"]==4018 and data["source"]["missing_days"]==0
@@ -76,6 +112,10 @@ def main():
         assert abs(data["source"]["mean_temp_c"]-26.13)<.01
         assert data["status"]=="Exploratorio" and data["trial"]
         assert len(data["alternatives"])==3 and data["alternatives"][0]["metrics"]["historical"]["deficit_mm"]>0
+        assert data["candidate_count"]>24 and len(data["moisture"]["monthly"])==132
+        assert len(data["climate_indicators"])==11 and data["alternatives"][0]["recommendation"]["reasons"]
+        if args.soil:
+            assert data['regional_soil']['texture']=='Franco arcillo arenosa'
         expect(page.locator(".js-plotly-plot").first).to_be_visible(timeout=20000)
         page.screenshot(path=args.output/"comparacion.png",full_page=True)
         for width in (360, 390, 768, 1440):
@@ -96,7 +136,7 @@ def main():
 
         page.get_by_role("button",name="Generar informe").click()
         link=page.get_by_role("link",name="Descargar PDF")
-        expect(link).to_be_visible(timeout=90000)
+        expect(link).to_be_visible(timeout=140000)
         with page.expect_download() as download_pdf:
             link.click()
         download_pdf.value.save_as(args.output/"informe.pdf")
@@ -105,7 +145,8 @@ def main():
         download_csv.value.save_as(args.output/"metricas.csv")
         reportid=link.get_attribute("href").split("/")[-2]
         pdf=PdfReader(args.output/"informe.pdf")
-        assert len(pdf.pages)==2
+        assert len(pdf.pages)>=3
+        assert any("Recomendaciones basadas en el análisis" in p.extract_text() for p in pdf.pages)
         assert "Informe de rotación agrícola" in pdf.pages[0].extract_text()
         assert "Productor de prueba" in pdf.pages[0].extract_text()
         with (args.output/"metricas.csv").open(encoding="utf-8",newline="") as input_csv:
@@ -200,6 +241,7 @@ def main():
         page.get_by_label("Contraseña").fill(password)
         page.get_by_role("button",name="Iniciar sesión").click()
         expect(page.get_by_role("heading",name="Planifica tu próxima rotación")).to_be_visible()
+        expect(page.get_by_role("heading",name="Primeros pasos")).to_have_count(0)
         assert not errors,errors
         print("Aceptación web/API correcta · piloto, escenarios, PDF, CSV, aislamiento e importaciones")
         print("Análisis",runid,"· Informe",reportid,"· Evidencia",args.output)

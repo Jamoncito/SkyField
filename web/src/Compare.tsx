@@ -93,6 +93,9 @@ export function Compare({id,summary,go,refresh}:{id:string;summary?:RunSummary;g
         {metrics.windows.length>0&&metrics.lowest_deficit_windows!==undefined&&<p className="muted">La opción tuvo el menor déficit de las alternativas mostradas en {metrics.lowest_deficit_windows} de {metrics.windows.length} ventanas. Se cuentan empates.</p>}
         <p className="muted">{metrics.windows.length?'Ventanas históricas de tres años con inicio en '+metrics.windows.join(', ')+(metrics.deficit_range?' · rango de déficit '+metrics.deficit_range.map(x=>n(x,1)).join(' a ')+' mm':''):'Balance diario pendiente para este escenario.'}</p>
       </section>}
+      {selected?.recommendation&&<section className="card panel advice"><h2>{selected.recommendation.title}</h2><h3>{selected.names.join(' → ')}</h3>
+        <ul>{selected.recommendation.reasons.map(reason=><li key={reason}>{reason}</li>)}</ul>
+        <p className="notice">{selected.recommendation.check}</p><a href={selected.recommendation.source} target="_blank" rel="noreferrer">Prácticas de salud del suelo · USDA NRCS</a></section>}
       <div className="evidence-grid">
         <section className="card panel"><div className="section-head"><div><h2>Clima mensual histórico</h2><p>{data.source.product} · meses completos</p></div></div>
           <div className="legend"><span><i/> Lluvia acumulada</span><span><i/> Temperatura media</span></div><ClimateChart monthly={data.monthly}/></section>
@@ -100,7 +103,31 @@ export function Compare({id,summary,go,refresh}:{id:string;summary?:RunSummary;g
           {data.alternatives.some(r=>r.metrics[scenario].deficit_mm!==null)?<Plot label="Déficit hídrico por alternativa" data={[{type:'bar',x:data.alternatives.map((_,i)=>'Opción '+(i+1)),y:data.alternatives.map(r=>r.metrics[scenario].deficit_mm),marker:{color:data.alternatives.map(r=>r.id===choice?'#32775a':'#bed5a7')}}]} layout={{yaxis:{rangemode:'tozero',gridcolor:'#eef2eb'},showlegend:false}}/>:
             <div className="plot-empty"><Droplets size={28}/><p>Completa las entradas hídricas para calcular este indicador.</p></div>}</section>
       </div>
+      {(!!data.climate_indicators?.length||data.moisture!==undefined)&&<section className="card panel"><div className="section-head"><div><h2>Vulnerabilidad climática del entorno</h2><p>Indicadores históricos del punto representativo y su grilla de origen.</p></div></div>
+        {!!data.climate_indicators?.length&&<details className="form-details"><summary>Lluvia, demanda de agua, calor y frío por año</summary>
+          <Plot label="Lluvia y evapotranspiración de referencia anual" data={[
+            {type:'scatter',mode:'lines+markers',name:'Lluvia',x:data.climate_indicators.map(x=>x.year),y:data.climate_indicators.map(x=>x.rain_mm),line:{color:'#32775a'}},
+            {type:'scatter',mode:'lines+markers',name:'ET₀',x:data.climate_indicators.map(x=>x.year),y:data.climate_indicators.map(x=>x.et0_mm),line:{color:'#a56836'}}]} layout={{yaxis:{title:'mm/año'},legend:{orientation:'h'}}}/>
+          <div className="table-scroll"><table className="data-table"><thead><tr>{['Año','Lluvia (mm)','ET₀ (mm)','Lluvia − ET₀ (mm)','Temp. media (°C)','Días ≤0 °C¹','Días ≥35 °C²'].map(t=><th scope="col" key={t}>{t}</th>)}</tr></thead>
+          <tbody>{data.climate_indicators.map(a=><tr key={a.year}>{[a.year,a.rain_mm,a.et0_mm,a.balance_mm,a.temp_c,a.frost_days,a.hot_days].map((v,i)=><td key={i}>{n(v,i===4?2:0)}</td>)}</tr>)}</tbody></table></div>
+          <p className="muted">¹ Mínima diaria. ² Máxima diaria. Son umbrales de exposición regional. La tolerancia depende del cultivo y su etapa. Lluvia menos ET₀ es un indicador climático, distinto del déficit calculado en la raíz.</p></details>}
+        {data.moisture?<details className="form-details"><summary>Anomalías de humedad en la zona radicular</summary>
+          <Plot label="Anomalía mensual de humedad radicular, puntos porcentuales" data={[{type:'bar',x:data.moisture.monthly.map(m=>m.month),
+            y:data.moisture.monthly.map(m=>m.anomaly),marker:{color:data.moisture.monthly.map(m=>m.anomaly<0?'#b67142':'#32775a')}}]} layout={{yaxis:{title:'puntos porcentuales'},showlegend:false}}/>
+          <p><a href={data.moisture.url} target="_blank" rel="noreferrer">{data.moisture.source}</a> · {data.moisture.support}. La anomalía compara cada mes completo con la mediana del mismo mes en el histórico. Un valor negativo señala menor humedad relativa habitual.</p>
+        </details>:data.moisture===null&&<p className="notice">La fuente de humedad regional no entregó una serie utilizable para este punto.</p>}
+        <details className="form-details"><summary>Cómo interpretar los datos y sus escalas</summary>
+          <dl className="glossary"><dt>Evapotranspiración</dt><dd>Agua que se evapora del suelo y que transpiran las plantas. ET₀ representa la demanda atmosférica para una superficie de referencia.</dd>
+            <dt>Balance y estrés hídrico</dt><dd>El balance simula lluvia, riego, consumo y drenaje. Cuando el agua aprovechable cae, disminuye el consumo simulado y aparece un déficit frente a la demanda.</dd>
+            <dt>NDVI y vegetación</dt><dd>El índice compara reflectancia roja e infrarroja cercana. Ayuda a seguir actividad vegetal, que también cambia por nubes, fenología y cobertura. El mapa muestra compuestos mensuales MODIS como contexto. <a href="https://www.usgs.gov/landsat-missions/landsat-normalized-difference-vegetation-index" target="_blank" rel="noreferrer">USGS Landsat</a></dd>
+            <dt>Heladas</dt><dd>La temperatura mínima del aire ≤0 °C señala exposición potencial. Una estación cercana y el relieve ayudan a verificar microclimas.</dd>
+            <dt>Observaciones y mediciones</dt><dd>Los satélites captan señales en píxeles. MERRA-2 combina observaciones y un modelo regional. SoilGrids predice propiedades de suelo. Una medición de campo caracteriza el punto, la profundidad y el momento del muestreo.</dd>
+            <dt>Compatibilidad espacial y temporal</dt><dd>Se enlazan datos a través del punto del lote, agrupando el clima por día, mes o año según el indicador. Se conserva la escala original de cada fuente. Las grillas regionales no permiten localizar estrés dentro del terreno.</dd></dl>
+          <p><a href="https://www.spaceappschallenge.org/2026/challenges/field-shift-adapting-farms-with-nasa-data/" target="_blank" rel="noreferrer">Reto Field Shift · NASA Space Apps</a></p>
+        </details></section>}
       <section className="card panel"><div className="section-head"><div><h2>Suelo y datos por confirmar</h2><p>{data.missing.length?data.missing.join(' · '):'Entradas para el cálculo declaradas por el productor.'}</p></div></div>
+        {data.regional_soil&&<SoilDetails profile={data.regional_soil}/>}
+        {data.regional_retention&&<p className="notice">El balance usa retención estimada por SoilGrids y la profundidad útil indicada.</p>}
         {Object.entries(data.excluded).map(([crop,reasons])=><p className="notice" key={crop}><strong>{crop}</strong> {reasons.join(' ')}</p>)}
         {data.soil.length>0&&<details className="form-details"><summary>Muestras importadas ({data.soil.length} resultados)</summary><ul>{data.soil.map((s,i)=><li key={i}>{s.sample_code} · {s.sampled_on} · {s.depth_from_cm} a {s.depth_to_cm} cm · {s.variable} {s.value} {s.unit} · {s.method}</li>)}</ul></details>}
         {data.campaigns.length>0&&<details className="form-details"><summary>Campañas importadas ({data.campaigns.length})</summary><ul>{data.campaigns.map((c,i)=><li key={i}>{c.crop_code} · {c.cultivar} · {c.planting_date} a {c.harvest_date}</li>)}</ul></details>}
@@ -131,3 +158,4 @@ function OptionCard({option,i,selected,scenario,onSelect}:{option:Option;i:numbe
     <span className="option-bottom">{selected?'Seleccionada':'Seleccionar alternativa'} <ArrowRight size={15}/></span>
   </button>;
 }
+import { SoilDetails } from './SoilProfile';

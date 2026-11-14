@@ -10,6 +10,7 @@ from .climate import (chunks, copy_rows, get_power, ingest_climate, inspect, kee
 from .db import STORAGE, engine, many, one, query
 from .jobs import JobError, LeaseLost, claim, complete, fail, guard, renew
 from .model import CROPS, run_model
+from .evidence import moisture
 from .report import render
 from .storage import persist, restore
 
@@ -129,7 +130,9 @@ def do_analysis(job, progress):
             FROM campaigns c JOIN imports i ON i.id=c.import_id WHERE c.field_id=:f AND i.field_version=:v AND i.created<=:cutoff
             ORDER BY c.harvest_date DESC LIMIT 100
         """, f=run["field_id"], v=run["field_version"], cutoff=run["input_cutoff"] or run["created"])
-    output, daily = run_model(rows,dataset["metadata"],site,run["inputs"])
+    output, daily = run_model(rows,dataset["metadata"],site,run["inputs"],run["inputs"].get("regional_soil"))
+    progress(82)
+    output["moisture"] = moisture(site["lon"],site["lat"])
     output.update(dataset_id=str(dataset["id"]),soil=soil,campaigns=campaigns)
     with engine.begin() as conn:
         guard(conn,job)

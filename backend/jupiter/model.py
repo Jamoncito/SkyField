@@ -7,11 +7,11 @@ import numpy as np
 from .climate import COLS
 from .jobs import JobError
 
-VERSION = "water-balance-1.0.0"
-CATALOG_VERSION = "fao56-illustrative-1"
+VERSION = "water-balance-1.1.0"
+CATALOG_VERSION = "fao56-regional-2"
 FAO = "https://www.fao.org/4/x0490e/x0490e00.htm"
-# FAO 56 tables 12 and 22 supply general parameter ranges. The exact stages,
-# planting windows, cover candidate and limits below are calibration fixtures.
+# FAO 56 tables 11, 12, 22 and 23 provide reference coefficients and ranges.
+# The calendar and crop cover assumptions require local cultivar calibration.
 CROPS = {
     "soy": dict(name="Soya", family="Fabaceae", days=[20,30,55,25], kc=[.4,1.15,.5],
                 root=.8, p=.5, window=[10,11,12,1], ph=[5.5,7.8], ec=5, cover=.86),
@@ -21,7 +21,19 @@ CROPS = {
                     root=1.2, p=.55, window=[10,11,12,1,2], ph=[5.5,8.3], ec=6.8, cover=.79),
     "cover": dict(name="Cobertura (mucuna)", family="Fabaceae", days=[20,30,30,15], kc=[.3,.95,.55],
                   root=.5, p=.5, window=[10,11,12,1,2], ph=[5,7.8], ec=None, cover=.93),
+    "bean": dict(name="Frejol seco", family="Fabaceae", days=[20,30,40,20], kc=[.4,1.15,.35],
+                 root=.75,p=.45,window=[4,5,10,11],ph=None,ec=1.,cover=.80),
+    "peanut": dict(name="Maní", family="Fabaceae", days=[25,35,45,25], kc=[.4,1.15,.60],
+                   root=.75,p=.50,window=[10,11,12,1],ph=None,ec=3.2,cover=.82),
+    "sesame": dict(name="Sésamo", family="Pedaliaceae", days=[20,30,40,20], kc=[.35,1.10,.25],
+                   root=1.25,p=.60,window=[11,12,1],ph=None,ec=None,cover=.65),
+    "sunflower": dict(name="Girasol", family="Asteraceae", days=[25,35,45,25], kc=[.35,1.10,.35],
+                      root=1.15,p=.45,window=[4,5,6],ph=None,ec=None,cover=.78),
+    "wheat": dict(name="Trigo de primavera", family="Poaceae", days=[20,30,60,40], kc=[.30,1.15,.30],
+                  root=1.25,p=.55,window=[5,6,7],ph=None,ec=6.,cover=.80),
 }
+for code in ("soy", "maize", "sorghum"):
+    CROPS[code]["window"] += [5,6,7] if code != "soy" else [6,7]
 WEIGHTS = {"balanced":[.50,.30,.20],"water":[.78,.12,.10],"cover":[.23,.67,.10],"diversity":[.25,.15,.60]}
 
 def et0(rows, latitude, elevation, warming=0):
@@ -90,13 +102,15 @@ def sequences(inputs):
     viable = {}
     excluded = {}
     for code, crop in CROPS.items():
+        if inputs.get("allowed_crops") is not None and code not in inputs["allowed_crops"]:
+            continue
         reasons = []
         if inputs["plant_month"] not in crop["window"]:
             reasons.append("Mes de siembra fuera de la ventana ilustrativa.")
-        if inputs["soil_ph"] is not None and not crop["ph"][0] <= inputs["soil_ph"] <= crop["ph"][1]:
+        if inputs["soil_ph"] is not None and crop["ph"] and not crop["ph"][0] <= inputs["soil_ph"] <= crop["ph"][1]:
             reasons.append("pH declarado fuera del intervalo ilustrativo.")
         if inputs["soil_ec"] is not None and crop["ec"] is not None and inputs["soil_ec"] > crop["ec"]:
-            reasons.append("CE declarada supera el umbral ilustrativo.")
+            reasons.append("La conductividad declarada supera el umbral de referencia del catálogo.")
         if reasons:
             excluded[crop["name"]] = reasons
         else:
@@ -127,6 +141,8 @@ def project(rows, planting_year, seq, inputs, profile, scenario, trace=False):
     monthly_coverage, total_deficit, stressed, irrigation_sum = [], 0., 0, 0.
     last_depth, root_water, outside_water = full_depth,.5*(fc-wp)*full_depth*1000,0.
     season = 0
+    frost_days = hot_days = bare_days = 0
+    warming = inputs["warming_c"] if scenario == "sensitivity" else 0
     daily = []
     for row, demand0, rain0 in rows:
         day = row["date"]
@@ -135,6 +151,9 @@ def project(rows, planting_year, seq, inputs, profile, scenario, trace=False):
         crop = CROPS[seq[season]]
         age = (day-planting[season]).days
         growing = 0 <= age < sum(crop["days"])
+        frost_days += growing and row["tmin_c"] + warming <= 0
+        hot_days += growing and row["tmax_c"] + warming >= 35
+        bare_days += not growing
         kc, root, canopy = growth(crop, age) if growing else (.20, .20, .0)
         depth = min(root,full_depth)
         if depth > last_depth and full_depth > last_depth:
@@ -163,6 +182,7 @@ def project(rows, planting_year, seq, inputs, profile, scenario, trace=False):
                           round(irrigation,3),round(drain-retained,3),round(runoff,3),round(raw,3)])
     return dict(scenario=scenario,year=planting_year, deficit_mm=round(total_deficit,2),
                 stress_days=stressed, cover_pct=round(100*float(np.mean(monthly_coverage)),2),
+                frost_days=frost_days, hot_days=hot_days, fallow_days=bare_days,
                 irrigation_mm=round(irrigation_sum,2)), daily
 
 def windows(rows, inputs, elevation, latitude):
@@ -181,9 +201,14 @@ def windows(rows, inputs, elevation, latitude):
             yield scenario, year, [(rows[i],float(demands[i]), rows[i]["precip_mm_day"]*(1+rain_shift/100))
                                    for i in selected]
 
-def run_model(rows, source, site, inputs):
+def run_model(rows, source, site, inputs, soil_profile=None):
     patterns, excluded, baseline = sequences(inputs)
     profile = {k: inputs[k] for k in ["theta_fc","theta_wp","depth_m"]}
+    from .soil import retention_at_depth
+    regional = retention_at_depth(soil_profile, profile["depth_m"]) if inputs.get("use_regional_soil") else None
+    soil_used = bool(regional and profile["theta_fc"] is None and profile["theta_wp"] is None)
+    if soil_used:
+        profile.update(regional)
     missing = [label for key,label in [("theta_fc","capacidad de campo"),("theta_wp","punto de marchitez"),
                                        ("depth_m","profundidad útil"),("soil_ph","pH"),("soil_ec","conductividad eléctrica")]
                if inputs[key] is None]
@@ -191,14 +216,19 @@ def run_model(rows, source, site, inputs):
         missing.append("cultivo anterior")
     if inputs["irrigation"] == "unknown":
         missing.append("disponibilidad de riego")
+    assumed = []
     if inputs["trial"]:
         defaults = {"theta_fc":.29,"theta_wp":.14,"depth_m":.85}
+        assumed.extend(k for k,v in profile.items() if v is None)
         profile = {k: defaults[k] if v is None else v for k,v in profile.items()}
     elevation = inputs["elevation_m"] if inputs["elevation_m"] is not None else source.get("elevation_m")
     if elevation is None:
         missing.append("elevación")
         if inputs["trial"]:
             elevation = 250.
+            assumed.append("elevation_m")
+    if inputs["irrigation"] == "unknown" and inputs["trial"]:
+        assumed.append("irrigation")
     if elevation is None or None in profile.values() or (inputs["irrigation"] == "unknown" and not inputs["trial"]):
         candidates = []
     else:
@@ -208,21 +238,20 @@ def run_model(rows, source, site, inputs):
     if not candidates:
         missing.append("ventanas aptas para balance hídrico")
     weights = WEIGHTS[inputs["priority"]]
-    records, daily = [], {}
+    records = []
     choices = [(f"rotation-{'-'.join(seq)}", seq) for seq in patterns]
     if baseline:
         choices.append(("reference",baseline))
     for rotation_id, seq in choices:
         families = [CROPS[x]["family"] for x in seq]
         diversity = sum(a!=b for a,b in zip(families,families[1:]))/2
-        metrics, samples = {}, {}
+        metrics = {}
         for scenario in ("historical","sensitivity"):
-            simulations = [project(data,year,seq,inputs,profile,scenario,trace=not samples.get(scenario))
+            simulations = [project(data,year,seq,inputs,profile,scenario)
                            for case,year,data in candidates if case==scenario]
-            samples[scenario] = simulations[0][1] if simulations else []
             values = [item[0] for item in simulations]
             metrics[scenario] = {k:round(float(np.mean([v[k] for v in values])),2) if values else None
-                                 for k in ("deficit_mm","stress_days","cover_pct","irrigation_mm")}
+                                 for k in ("deficit_mm","stress_days","cover_pct","irrigation_mm","frost_days","hot_days","fallow_days")}
             metrics[scenario]["windows"] = [v["year"] for v in values]
             metrics[scenario]["window_results"] = values
             metrics[scenario]["deficit_range"] = [min(v["deficit_mm"] for v in values),
@@ -242,7 +271,6 @@ def run_model(rows, source, site, inputs):
                             criteria=dict(zip(["water","cover","diversity"],terms)),
                             calendar=[dict(crop=CROPS[c]["name"], month=inputs["plant_month"],
                                            duration=sum(CROPS[c]["days"])) for c in seq]))
-        daily[rotation_id] = samples
     reference = next((r for r in records if r["id"]=="reference"),None)
     ranked = sorted((r for r in records if r["id"]!="reference"),key=lambda r:(-r["score"],r["id"]))[:3]
     for case in ("historical", "sensitivity"):
@@ -255,12 +283,15 @@ def run_model(rows, source, site, inputs):
                            if sample["year"] == outcome["year"])
                 wins += outcome["deficit_mm"] == best
             metrics["lowest_deficit_windows"] = wins
+    from .evidence import climate_indicators, recommendation
     values = dict(version=VERSION,catalog_version=CATALOG_VERSION,catalog_source=FAO,
                   alternatives=ranked,reference=reference,excluded=excluded,monthly=monthly(rows),
                   candidate_count=len(patterns),missing=missing,source=source,weights=weights,trial=inputs["trial"],
                   status="Exploratorio",profile=profile,elevation_m=elevation,
+                  regional_soil=soil_profile, regional_retention=soil_used, assumed=assumed,
+                  climate_indicators=climate_indicators(rows,latitude=site["lat"],elevation=elevation),
                   catalog_parameters=CROPS,
-                  limitations=["Calendario, tolerancias, cobertura y cultivares de demostración. Validar con agronomía local.",
+                  limitations=["Coeficientes y raíces de referencia FAO 56. Calendario, cobertura y cultivares requieren validación local.",
                     "Balance con humedad inicial al 50 %, escorrentía ilustrativa de 10 % y suelo uniforme.",
                     "La humedad relativa media aproxima la presión real de vapor. El clima es regional.",
                     "El escenario de sensibilidad aplica factores uniformes a la secuencia diaria histórica.",
@@ -268,5 +299,13 @@ def run_model(rows, source, site, inputs):
                     "La referencia, si existe, repite el cultivo anterior como supuesto explícito."],
                   actions=[{"item":"Muestreo de suelo por profundidad","reason":"Confirmar retención, pH, CE, textura y profundidad útil."},
                     {"item":"Revisar calendario y disponibilidad hídrica","reason":"Confirmar con el productor y un agrónomo las ventanas, cultivares, historial sanitario y caudal."}])
-    kept = {r["id"] for r in ranked + ([reference] if reference else [])}
-    return values, {k:v for k,v in daily.items() if k in kept}
+    first_windows = {}
+    for case,year,data in candidates:
+        first_windows.setdefault(case,(year,data))
+    daily = {}
+    for record in ranked + ([reference] if reference else []):
+        daily[record["id"]] = {case:project(first_windows[case][1],first_windows[case][0],record["crops"],
+            inputs,profile,case,trace=True)[1] if case in first_windows else [] for case in ("historical","sensitivity")}
+        if record is not reference:
+            record["recommendation"] = recommendation(record, reference, assumed, soil_used, inputs["priority"])
+    return values, daily

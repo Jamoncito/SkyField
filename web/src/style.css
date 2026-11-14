@@ -157,3 +157,15 @@ input[type="checkbox"]{width:19px;min-height:19px;accent-color:#266247;margin:2p
   .main{padding-bottom:max(28px,env(safe-area-inset-bottom))}
   .option-top,.option-bottom,.option dl div{flex-wrap:wrap}
 }
+.map-search{position:relative;display:grid;gap:9px;padding:12px;background:#f6f9f3;border-bottom:1px solid #dce6da}
+.map-search .segments{width:fit-content}.map-search .segments button{display:flex;align-items:center;gap:6px;min-height:40px}
+.place-search{position:relative}.place-results{z-index:4;position:absolute;top:100%;left:0;right:0;max-height:240px;overflow:auto;margin:3px 0 0;padding:5px;list-style:none;background:#fff;border:1px solid #ceddcd;border-radius:8px;box-shadow:0 9px 24px #143b2826}
+.place-results li>button{width:100%;min-height:44px;border:0;border-radius:5px;text-align:left;background:#fff;padding:8px 10px}.place-results li>button:hover,.place-results li>button:focus-visible{background:#edf4e8}.place-results li>button small{display:block;color:#52705c}.place-results li[role=status]{padding:10px}
+.coordinates-search{display:grid;grid-template-columns:repeat(2,minmax(0,1fr)) auto;gap:9px;align-items:end}.coordinates-search .button{min-height:44px}
+.offline-tools{padding:12px;display:flex;align-items:center;flex-wrap:wrap;gap:10px}.offline-tools a{font-size:14px}.offline-page{max-width:1100px;margin:auto}.offline-page .brand{color:#214735}.offline-page .brand small{color:#50705a}
+.onboarding{border-left:4px solid #689d4d}.onboarding .section-head{margin-bottom:6px}.onboarding p{margin-top:5px}.onboarding .button-row{margin-top:12px}
+.crop-selection,.soil-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.crop-selection label{margin:0}.soil-summary>div{border-radius:8px;background:#eef4e8;padding:10px;display:flex;flex-direction:column;gap:5px}.soil-summary small{color:#466553}.soil-summary b{font-size:18px}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}.data-table :is(th,td){text-align:left;padding:8px;border-bottom:1px solid #dce7da}.data-table th{background:#eef4e8}.table-scroll{max-width:100%;overflow:auto}
+.advice h3{font-size:17px;margin:10px 0}.advice li,.glossary dd{margin-bottom:8px}.glossary dt{font-weight:750}.glossary dd{margin-left:0}
+@media(max-width:620px){.coordinates-search{grid-template-columns:repeat(2,minmax(0,1fr))}.coordinates-search button{grid-column:1/-1;justify-self:start}.map-search .segments button,.offline-tools .button{min-height:44px}.soil-summary,.crop-selection{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.nasa-controls{padding:9px 12px;background:#f6f9f3;color:#355d48}.nasa-controls summary{cursor:pointer;font-weight:700}.nasa-controls .two-col{margin-top:12px}.nasa-controls p{margin:7px 0 0}

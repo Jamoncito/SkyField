@@ -15,9 +15,11 @@ from .climate import CAMPAIGN, COLS, LIMIT, SOIL, inspect, keep_file
 from .db import ROOT, STORAGE, engine, many, one, query
 from .geometry import FIELD_COLUMNS, save_field, seed_pilot
 from .jobs import JobError, enqueue
+from .model import CROPS
+from .soil import lookup
 
 LOG = logging.getLogger("jupiter.api")
-app = FastAPI(title="Júpiter Jr", version="1.0.0", docs_url="/api/docs",
+app = FastAPI(title="Júpiter Jr", version="1.1.0", docs_url="/api/docs",
               openapi_url="/api/openapi.json", redoc_url=None)
 
 class Credentials(BaseModel):
@@ -40,7 +42,9 @@ class FieldInput(BaseModel):
     version: int | None = Field(default=None, ge=1)
 
 class AnalysisInput(BaseModel):
-    previous: str = Field(default="unknown", pattern="^(unknown|soy|maize|sorghum|cover)$")
+    previous: str = Field(default="unknown", max_length=20)
+    allowed_crops: list[str] | None = Field(default=None, min_length=3, max_length=len(CROPS))
+    use_regional_soil: bool = False
     irrigation: str = Field(default="unknown", pattern="^(unknown|rainfed|confirmed)$")
     irrigation_mm: float | None = Field(default=None, ge=0, le=100)
     priority: str = Field(default="balanced", pattern="^(balanced|water|cover|diversity)$")
@@ -54,6 +58,20 @@ class AnalysisInput(BaseModel):
     trial: bool = False
     rainfall_shift_pct: float = Field(default=-15, ge=-60, le=60)
     warming_c: float = Field(default=1, ge=-4, le=6)
+
+    @field_validator("previous")
+    @classmethod
+    def previous_crop(cls, value):
+        if value != "unknown" and value not in CROPS:
+            raise ValueError("Cultivo desconocido")
+        return value
+
+    @field_validator("allowed_crops")
+    @classmethod
+    def crop_selection(cls, value):
+        if value is not None and (len(set(value)) != len(value) or not set(value) <= CROPS.keys()):
+            raise ValueError("Selecciona cultivos válidos y distintos")
+        return value
 
 class ReportInput(BaseModel):
     rotation_id: str = Field(min_length=1, max_length=40)
@@ -116,7 +134,7 @@ def register(body: Registration, request: Request, response: Response):
     try:
         with engine.begin() as conn:
             user = one(conn, """INSERT INTO users(name,email,password_hash) VALUES(:n,:e,:p)
-                    RETURNING id,name,email""", n=body.name, e=email, p=auth.PASSWORDS.hash(body.password))
+                    RETURNING id,name,email,guide_seen""", n=body.name, e=email, p=auth.PASSWORDS.hash(body.password))
             seed_pilot(conn, user["id"])
             return auth.start_session(conn, request, response, user)
     except IntegrityError as exc:
@@ -130,14 +148,14 @@ def login(body: Credentials, request: Request, response: Response):
     email = body.email.casefold()
     with engine.begin() as conn:
         limited = auth.limit(conn, request, email, "login")
-        user = one(conn, "SELECT id,name,email,password_hash FROM users WHERE email=:e", e=email)
+        user = one(conn, "SELECT id,name,email,password_hash,guide_seen FROM users WHERE email=:e", e=email)
     if limited:
         raise HTTPException(429, "Demasiados intentos. Espera 15 minutos.")
     if not auth.verify(body.password, user):
         raise HTTPException(401, "Correo o contraseña incorrectos.")
     with engine.begin() as conn:
         return auth.start_session(conn, request, response,
-                                  {key: user[key] for key in ["id","name","email"]})
+                                  {key: user[key] for key in ["id","name","email","guide_seen"]})
 
 @app.post("/api/auth/logout", status_code=204)
 def logout(request: Request, user=Depends(write_user)):
@@ -150,6 +168,11 @@ def logout(request: Request, user=Depends(write_user)):
 @app.get("/api/me")
 def me(user=Depends(read_user)):
     return user
+
+@app.post("/api/me/guide", status_code=204)
+def see_guide(user=Depends(write_user)):
+    with engine.begin() as conn:
+        query(conn, "UPDATE users SET guide_seen=true WHERE id=:i", i=user["id"])
 
 @app.get("/api/fields")
 def fields(offset: int = 0, user=Depends(read_user)):
@@ -226,6 +249,47 @@ def import_file(field_id: UUID, kind: str = Form(), file: UploadFile = File(), u
     finally:
         temp.unlink(missing_ok=True)
 
+@app.get("/api/crops")
+def crops(user=Depends(read_user)):
+    return [{"code":code,"name":crop["name"],"family":crop["family"],"months":crop["window"]}
+            for code,crop in CROPS.items()]
+
+
+@app.get("/api/fields/{field_id}/soil-profile")
+def soil_profile(field_id: UUID, user=Depends(read_user)):
+    with engine.connect() as conn:
+        field = owned(conn,"fields",field_id,user["id"])
+        entry = one(conn,"SELECT profile FROM regional_soil WHERE field_id=:i AND field_version=:v",
+                    i=field_id,v=field["version"])
+    return entry["profile"] if entry else None
+
+
+@app.post("/api/fields/{field_id}/soil-profile")
+def query_soil(field_id: UUID, user=Depends(write_user)):
+    with engine.connect() as conn:
+        field = owned(conn,"fields",field_id,user["id"])
+        snapshot = one(conn,"SELECT snapshot FROM field_versions WHERE field_id=:i AND version=:v",
+                       i=field_id,v=field["version"])["snapshot"]
+        cached = one(conn,"SELECT profile FROM regional_soil WHERE field_id=:i AND field_version=:v",
+                     i=field_id,v=field["version"])
+    if cached and cached["profile"].get("coverage") == 17:
+        return cached["profile"]
+    if snapshot["multicell"]:
+        raise HTTPException(422,"Usa un punto o un lote pequeño para consultar el perfil regional.")
+    profile = lookup(snapshot["lon"],snapshot["lat"])
+    if profile is None:
+        if cached:
+            return cached["profile"]
+        raise HTTPException(503,"SoilGrids no entregó datos para este punto. Reintenta o usa observaciones del lote.")
+    with engine.begin() as conn:
+        row = one(conn,"""INSERT INTO regional_soil (field_id,field_version,profile) VALUES(:i,:v,CAST(:p AS jsonb))
+          ON CONFLICT(field_id,field_version) DO UPDATE SET profile=CASE
+            WHEN (excluded.profile->>'coverage')::int > coalesce((regional_soil.profile->>'coverage')::int,0)
+            THEN excluded.profile ELSE regional_soil.profile END RETURNING profile""",
+                  i=field_id,v=field["version"],p=json.dumps(profile))
+    return row["profile"]
+
+
 @app.post("/api/fields/{field_id}/analyses", status_code=202)
 def analyze(field_id: UUID, body: AnalysisInput, user=Depends(write_user)):
     if body.theta_fc is not None and body.theta_wp is not None and body.theta_wp >= body.theta_fc:
@@ -236,15 +300,23 @@ def analyze(field_id: UUID, body: AnalysisInput, user=Depends(write_user)):
         current = owned(conn, "fields", field_id, user["id"])
         version = one(conn, "SELECT snapshot FROM field_versions WHERE field_id=:f AND version=:v",
                       f=field_id, v=current["version"])["snapshot"]
+        soil = one(conn,"SELECT profile FROM regional_soil WHERE field_id=:i AND field_version=:v",
+                   i=field_id,v=current["version"])
+        if body.use_regional_soil:
+            from .soil import retention_at_depth
+            if (body.theta_fc is not None or body.theta_wp is not None or
+                    not soil or retention_at_depth(soil["profile"],body.depth_m) is None):
+                raise HTTPException(422,"Para usar la retención regional, indica una profundidad útil cubierta (hasta 1 m) y deja vacías la capacidad de campo y la marchitez.")
         dataset = one(conn, """
            SELECT (summary->>'dataset_id')::uuid AS id FROM imports
            WHERE field_id=:f AND field_version=:v AND kind='climate' AND summary IS NOT NULL
            ORDER BY created DESC LIMIT 1
         """, f=field_id, v=current["version"])
+        inputs = {**body.model_dump(),"regional_soil":soil["profile"] if soil else None}
         run = one(conn, """
             INSERT INTO analysis_runs(owner,field_id,field_version,inputs,field_snapshot,dataset_id,input_cutoff)
             VALUES(:o,:f,:v,CAST(:i AS jsonb),CAST(:s AS jsonb),:dataset,now()) RETURNING id
-        """, o=user["id"], f=field_id, v=current["version"], i=body.model_dump_json(),
+        """, o=user["id"], f=field_id, v=current["version"], i=json.dumps(inputs),
                s=json.dumps(version), dataset=dataset["id"] if dataset else None)
         return dict(enqueue(conn, user["id"], "analysis", run["id"], f"analysis:{run['id']}"))
 
@@ -334,6 +406,13 @@ def download(report_id: UUID, format: str, user=Depends(read_user)):
 if os.getenv("SERVE_WEB") == "1":
     dist = ROOT / "web/dist"
     app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
+
+    @app.get("/regional/offline-sw.js", include_in_schema=False)
+    def offline_worker():
+        return FileResponse(dist / "regional/offline-sw.js", media_type="text/javascript",
+                            headers={"Service-Worker-Allowed":"/", "Cache-Control":"no-cache"})
+
+    app.mount("/regional", StaticFiles(directory=dist / "regional"), name="regional")
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):

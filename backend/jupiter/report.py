@@ -18,7 +18,9 @@ from .jobs import JobError
 
 MONTHS = "Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic".split()
 METRICS = {"deficit_mm":("Déficit hídrico","mm"),"stress_days":("Días con déficit","días"),
-           "cover_pct":("Cobertura media","%"),"irrigation_mm":("Riego simulado","mm")}
+           "cover_pct":("Cobertura media","%"),"irrigation_mm":("Riego simulado","mm"),
+           "frost_days":("Días con mínima ≤0 °C","días"),"hot_days":("Días con máxima ≥35 °C","días"),
+           "fallow_days":("Días fuera de cultivo simulado","días")}
 TRACE = ["date","crop","rain_mm","et0_mm","etc_mm","eta_mm","deficit_mm","depletion_mm",
          "irrigation_mm","drainage_mm","runoff_mm","raw_mm"]
 
@@ -151,6 +153,8 @@ def render(item, lease, progress):
             for rec in records:
                 for scenario, metrics in rec["metrics"].items():
                     for metric, (_,unit) in METRICS.items():
+                        if metric not in metrics:
+                            continue
                         out.writerow([clean(x) for x in [item["run_id"],scenario,rec["id"],metric,
                             metrics[metric],unit,output["dataset_id"],output["version"]]])
         with (folder/"daily.csv").open("w",encoding="utf-8",newline="") as stream:

@@ -40,4 +40,19 @@ ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;b
 <ul>{% for a in output.actions %}<li><b>{{a.item}}.</b> {{a.reason}}</li>{% endfor %}</ul>
 <h3>Calidad y procedencia</h3><p class="source">Pesos nominales: agua {{(100*output.weights[0])|round|int}} %, cobertura {{(100*output.weights[1])|round|int}} %, diversidad {{(100*output.weights[2])|round|int}} %. {% if selected.metrics.sensitivity.deficit_mm is not none %}Déficit medio bajo sensibilidad: {{selected.metrics.sensitivity.deficit_mm}} mm.{% endif %}</p><p class="source">Análisis {{item.run_id}} · Versión {{output.version}} · Catálogo {{output.catalog_version}} · FAO 56. {{output.source.missing_days}} días ausentes y {{output.source.incomplete_days}} observaciones incompletas.<br>SHA-256 {{output.source.sha256}}</p>
 <p class="source" style="margin-top:2mm">{{output.limitations|join(' ')}}</p>
+{% if selected.recommendation %}
+<div class="newpage"></div>
+<header><div class="brand"><img src="{{logo}}" alt="">Júpiter Jr</div><div class="meta">Orientación para el productor</div></header>
+<h2>Recomendaciones basadas en el análisis</h2>
+<div class="card"><h3>{{selected.recommendation.title}}</h3><p><b>{{selected.names|join(' → ')}}</b></p>
+<ul>{% for reason in selected.recommendation.reasons %}<li>{{reason}}</li>{% endfor %}</ul>
+<p>{{selected.recommendation.check}}</p><p class="source">Prácticas de salud del suelo · <a href="{{selected.recommendation.source}}">USDA NRCS</a>. Parámetros de cultivo · <a href="{{output.catalog_source}}">FAO 56</a>.</p></div>
+{% if output.regional_soil %}{% set soil=output.regional_soil %}
+<h3 style="margin-top:4mm">Perfil estimado del suelo</h3>
+<p>{{soil.texture or 'Textura pendiente'}} (0–5 cm). Arena {{soil.surface.sand if soil.surface.sand is not none else '—'}} %, limo {{soil.surface.silt if soil.surface.silt is not none else '—'}} %, arcilla {{soil.surface.clay if soil.surface.clay is not none else '—'}} %. pH {{soil.surface.phh2o if soil.surface.phh2o is not none else '—'}}{% if soil.ph_interval %} · intervalo del 90 % {{soil.ph_interval|join(' a ')}}{% endif %}. Carbono orgánico {{soil.surface.soc if soil.surface.soc is not none else '—'}} g/kg.</p>
+<p class="source"><a href="{{soil.url}}">{{soil.provider}}</a> · {{soil.resolution_m}} m · Consultado el {{soil.retrieved[:10]}}. {% if output.regional_retention %}El balance usa la retención estimada ponderada por la profundidad útil informada.{% else %}El perfil se adjunta como contexto. {% endif %} Contrasta con muestreo de laboratorio.</p>
+{% endif %}
+{% if output.moisture %}<h3 style="margin-top:4mm">Humedad regional</h3><p>La anomalía de humedad compara meses completos con la mediana histórica del mismo mes. La estimación representa el entorno regional.</p><p class="source"><a href="{{output.moisture.url}}">{{output.moisture.source}}</a> · {{output.moisture.support}}.</p>{% endif %}
+<p class="note">La recomendación orienta la comparación. Los datos climáticos regionales, la respuesta del cultivo y las propiedades de suelo tienen incertidumbre. Confirma la decisión con el productor y un profesional local.</p>
+{% endif %}
 </body></html>

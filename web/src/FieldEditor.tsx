@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, CloudSun, FileUp, FlaskConical, Info, MapPin, Save, Sprout } from 'lucide-react';
 import { api,day,errorText,n,post } from './client';
-import type { ImportRecord, Job, Shape, Site, Task } from './types';
+import type { Crop, ImportRecord, Job, Shape, Site, Task } from './types';
 import type { Go } from './App';
+import { SoilDetails, SoilPanel, useSoil } from './SoilProfile';
 
 const Map=lazy(()=>import('./Map'));
 const kindLabels={climate:'Clima',soil:'Suelo',campaigns:'Campañas'};
@@ -60,7 +61,7 @@ export function FieldEditor({id,analyzing,go,refresh}:{id:string|null;analyzing:
         </section>
       </div>
     </form>
-    {site&&<Imports site={site} records={records} refresh={loadImports}/>}
+    {site&&<><SoilPanel key={site.version} site={site} disabled={dirty}/><Imports site={site} records={records} refresh={loadImports}/></>}
   </>;
 }
 
@@ -117,10 +118,16 @@ function Imports({site,records,refresh}:{site:Site;records:ImportRecord[];refres
 function AnalysisForm({site,go}:{site:Site;go:Go}) {
   const [irrigation,setIrrigation]=useState('unknown'),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [trial,setTrial]=useState(false);
+  const [crops,setCrops]=useState<Crop[]>([]),[allowed,setAllowed]=useState<string[]>([]),[regional,setRegional]=useState(false);
+  const soil=useSoil(site);
+  const canUseSoil=!!soil.profile?.retention.length&&soil.profile.retention[0].fc!==null&&soil.profile.retention[0].wp!==null;
+  useEffect(()=>{let active=true;void api<Crop[]>('/crops').then(data=>{if(active){setCrops(data);setAllowed(data.map(c=>c.code));}})
+    .catch(e=>{if(active)setError(errorText(e));});return ()=>{active=false;};},[]);
   async function submit(e:FormEvent<HTMLFormElement>) {
     e.preventDefault();setBusy(true);setError('');
     const form=new FormData(e.currentTarget);
-    const body:Record<string,unknown>={previous:form.get('previous'),priority:form.get('priority'),irrigation,trial};
+    const body:Record<string,unknown>={previous:form.get('previous'),priority:form.get('priority'),irrigation,trial,
+      allowed_crops:allowed,use_regional_soil:regional};
     for(const k of ['irrigation_mm','theta_fc','theta_wp','depth_m','soil_ph','soil_ec','plant_month','elevation_m','rainfall_shift_pct','warming_c']){
       const value=form.get(k);if(value!=null&&value!=='')body[k]=Number(value);
     }
@@ -132,17 +139,26 @@ function AnalysisForm({site,go}:{site:Site;go:Go}) {
     <div className="page-heading"><div><h1>Preparar análisis</h1><p>{site.name} · versión {site.version} del lote</p></div></div>
     <form className="analysis-layout" onSubmit={submit}>
       <section className="card panel"><div className="section-head"><div><h2>Manejo y objetivos</h2><p>Usa los datos que puedes confirmar del terreno.</p></div></div>
-        <div className="two-col form-gap"><label>Cultivo anterior<select name="previous" defaultValue="unknown"><option value="unknown">No lo sé</option><option value="soy">Soya</option><option value="maize">Maíz</option><option value="sorghum">Sorgo</option><option value="cover">Cobertura (mucuna)</option></select></label>
+        <div className="two-col form-gap"><label>Cultivo anterior<select name="previous" defaultValue="unknown"><option value="unknown">No lo sé</option>{crops.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
         <label>Disponibilidad de riego<select value={irrigation} onChange={e=>setIrrigation(e.target.value)}><option value="unknown">No lo sé</option><option value="rainfed">Solo lluvia</option><option value="confirmed">Riego confirmado</option></select></label>
         {irrigation==='confirmed'&&<label>Riego máximo (mm/día)<input type="number" name="irrigation_mm" min=".1" max="100" step=".1" required/></label>}
         <label>Prioridad<select name="priority" defaultValue="balanced"><option value="balanced">Equilibrada</option><option value="water">Menor déficit de agua</option><option value="cover">Mayor cobertura</option><option value="diversity">Diversidad de familias</option></select></label>
         <label>Mes de siembra<select name="plant_month" defaultValue="11">{'Enero Febrero Marzo Abril Mayo Junio Julio Agosto Septiembre Octubre Noviembre Diciembre'.split(' ').map((m,i)=><option value={i+1} key={m}>{m}</option>)}</select></label></div>
-        <details className="form-details"><summary>Perfil de suelo y elevación</summary><div className="two-col form-gap">
-          <label>Capacidad de campo (m³/m³)<input type="number" name="theta_fc" min=".001" max=".8" step=".001" placeholder="Sin dato"/></label>
-          <label>Punto de marchitez (m³/m³)<input type="number" name="theta_wp" min="0" max=".799" step=".001" placeholder="Sin dato"/></label>
-          <label>Profundidad útil (m)<input type="number" name="depth_m" min=".1" max="3" step=".01" placeholder="Sin dato"/></label>
+        <details className="form-details"><summary>Cultivos disponibles ({allowed.length} de {crops.length})</summary>
+          <p className="muted">Desmarca los cultivos que no tienes previsto manejar por semilla, equipo, comprador o uso. Elige al menos tres. Las ventanas son orientativas para Santa Cruz.</p>
+          <div className="crop-selection">{crops.map(c=><label className="check-label" key={c.code}><input type="checkbox" checked={allowed.includes(c.code)}
+            onChange={e=>setAllowed(e.target.checked?[...allowed,c.code]:allowed.filter(x=>x!==c.code))}/><span>{c.name}</span></label>)}</div></details>
+        <details className="form-details"><summary>Perfil de suelo y elevación</summary>
+          {!soil.profile&&<button type="button" className="button secondary" disabled={soil.busy} onClick={()=>void soil.consult()}>{soil.busy?'Consultando…':'Consultar SoilGrids'}</button>}
+          {soil.error&&<p className="error" role="alert">{soil.error}</p>}
+          {soil.profile&&<SoilDetails profile={soil.profile}/>}
+          {canUseSoil&&<label className="check-label"><input type="checkbox" checked={regional} onChange={e=>setRegional(e.target.checked)}/><span>Usar retención regional estimada<small>Indica la profundidad útil observada hasta 1 m. Si tienes mediciones de retención, introdúcelas directamente.</small></span></label>}
+          <div className="two-col form-gap">
+          <label>Capacidad de campo (m³/m³)<input type="number" name="theta_fc" min=".001" max=".8" step=".001" placeholder="Sin dato" disabled={regional}/></label>
+          <label>Punto de marchitez (m³/m³)<input type="number" name="theta_wp" min="0" max=".799" step=".001" placeholder="Sin dato" disabled={regional}/></label>
+          <label>Profundidad útil (m)<input type="number" name="depth_m" min=".1" max={regional?'1':'3'} step=".01" placeholder="Sin dato" required={regional}/></label>
           <label>pH del suelo<input type="number" name="soil_ph" min="0" max="14" step=".01" placeholder="Sin dato"/></label>
-          <label>Conductividad (dS/m)<input type="number" name="soil_ec" min="0" max="100" step=".01" placeholder="Sin dato"/></label>
+          <label>Conductividad del extracto de saturación (dS/m)<input type="number" name="soil_ec" min="0" max="100" step=".01" placeholder="Sin dato"/></label>
           <label>Elevación medida (m)<input type="number" name="elevation_m" min="-450" max="8000" step="1" placeholder="Usar fuente climática si existe"/></label>
         </div></details>
         <details className="form-details"><summary>Sensibilidad hipotética</summary><div className="two-col form-gap">
@@ -152,7 +168,8 @@ function AnalysisForm({site,go}:{site:Site;go:Go}) {
       <aside className="card panel analysis-aside"><span className="metric-icon"><FlaskConical size={22}/></span><h2>Evaluación exploratoria</h2><p>El catálogo inicial es ilustrativo. Los indicadores dependen del clima histórico y de los datos declarados.</p>
         <label className="check-label"><input type="checkbox" checked={trial} onChange={e=>setTrial(e.target.checked)}/><span><b>Activar supuestos de ensayo</b><small>Completa entradas hídricas faltantes con un perfil de prueba identificado.</small></span></label>
         {error&&<p className="error" role="alert">{error}</p>}
-        <button className="button primary" disabled={busy||site.multicell}>{busy?'Enviando…':'Analizar rotaciones'}<ArrowRight size={17}/></button>
+        {crops.length>0&&allowed.length<3&&<p className="notice">Selecciona al menos tres cultivos disponibles.</p>}
+        <button className="button primary" disabled={busy||site.multicell||allowed.length<3}>{busy?'Enviando…':'Analizar rotaciones'}<ArrowRight size={17}/></button>
       </aside>
     </form>
   </>;
