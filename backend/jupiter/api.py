@@ -20,7 +20,7 @@ from .catalog import CONTEXT, catalog
 from .soil import lookup
 
 LOG = logging.getLogger("jupiter.api")
-app = FastAPI(title="Júpiter Jr", version="1.2.0", docs_url="/api/docs",
+app = FastAPI(title="Júpiter Jr", version="1.2.1", docs_url="/api/docs",
               openapi_url="/api/openapi.json", redoc_url=None)
 
 class Credentials(BaseModel):

@@ -2,7 +2,7 @@
 
 Júpiter Jr permite guardar terrenos agrícolas, comparar rotaciones de tres campañas con clima histórico y descargar un informe con la evidencia del análisis. El piloto **PT_priner lote** se crea al registrarse. Su ubicación de referencia está en Santa Cruz, Bolivia, y se guarda como punto.
 
-## Versión 1.2
+## Versión 1.2.1
 
 La web pública está en [jupiter-jr.onrender.com](https://jupiter-jr.onrender.com). El alojamiento gratuito se suspende tras 15 minutos sin actividad y su activación puede tardar alrededor de un minuto. El HTML se revalida al abrirlo y la interfaz muestra recuperación de errores y de recursos actualizados. La base gratuita de Render caduca a los 30 días desde su creación. [Condiciones de Render Free](https://render.com/docs/free).
 
