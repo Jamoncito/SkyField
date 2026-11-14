@@ -126,7 +126,7 @@ export function App() {
         return <button key={url} aria-current={active?'page':undefined} className={active?'active':''} onClick={()=>route(url)}><Icon size={18}/><span>{name}</span></button>;
       })}</nav>
       <div className="sidebar-footer"><div className="side-source"><span className="source-symbol"><Globe2 size={18}/></span><span><b>NASA POWER</b><small>Fuente de clima histórico</small></span></div>
-        <div className="sidebar-bottom"><span className="status-dot"/> Entorno local <Leaf size={13}/></div>
+        <div className="sidebar-bottom"><span className="status-dot"/> Aplicación web <Leaf size={13}/></div>
       </div>
     </aside>
     <div className="surface">
