@@ -401,7 +401,7 @@ def create_report(run_id: UUID, body: ReportInput, user=Depends(write_user)):
         if not result or body.rotation_id not in [record["id"] for record in result["output"]["alternatives"]]:
             raise HTTPException(422, "Selecciona una alternativa disponible en un análisis terminado.")
         row = one(conn, """
-          INSERT INTO reports(owner,run_id,rotation_id,producer) VALUES(:o,:a,:rot,:p)
+          INSERT INTO reports(owner,run_id,rotation_id,producer,template_version) VALUES(:o,:a,:rot,:p,2)
           ON CONFLICT(run_id,rotation_id,template_version) DO UPDATE SET rotation_id=excluded.rotation_id RETURNING id
         """, o=user["id"], a=run_id, rot=body.rotation_id, p=user["name"])
         return dict(enqueue(conn, user["id"], "report", row["id"], f"report:{row['id']}"))
