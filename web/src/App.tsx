@@ -1,12 +1,5 @@
 import { tr } from "./i18n";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import {
   Activity,
   ArrowDownToLine,
@@ -17,7 +10,6 @@ import {
   Globe2,
   LayoutDashboard,
   Leaf,
-  LogOut,
   MapPin,
   Menu,
   Plus,
@@ -95,140 +87,6 @@ function Brand() {
     </div>
   );
 }
-function Access({ onLogin }: { onLogin: (u: User) => void }) {
-  const [create, setCreate] = useState(false),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const fields = Object.fromEntries(new FormData(event.currentTarget));
-    setBusy(true);
-    setError("");
-    try {
-      onLogin(
-        await post<User>("/auth/" + (create ? "register" : "login"), fields),
-      );
-    } catch (err) {
-      setError(errorText(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <main className="access">
-      <aside className="access-photo">
-        <Brand />
-        <div>
-          <span className="eyebrow light">
-            <span />
-            {tr(" NASA POWER · AGRICULTURA")}
-          </span>
-          <h1>
-            {tr("Planifica cultivos")}
-            <br />
-            {tr("con datos de")}
-            <br />
-            {tr("tu zona.")}
-          </h1>
-          <p>Santa Cruz · Bolivia</p>
-        </div>
-        <p className="image-credit">
-          {tr("Imagen ilustrativa del paisaje agrícola")}
-        </p>
-      </aside>
-      <section className="access-body">
-        <div className="mobile-brand">
-          <Brand />
-        </div>
-        <div className="access-form">
-          <span className="eyebrow">
-            <span />
-            {tr(" TU ESPACIO DE TRABAJO")}
-          </span>
-          <h2>
-            {create
-              ? tr("Comienza con tu tierra")
-              : tr("Bienvenido a SkyField")}
-          </h2>
-          <p>
-            {create
-              ? tr("Crea tu primer lote con una guía práctica, paso a paso.")
-              : tr(
-                  "Clima, suelo y rentabilidad para planificar tu próxima cosecha.",
-                )}
-          </p>
-          <form onSubmit={submit}>
-            {create && (
-              <label>
-                {tr("Nombre visible")}
-                <input
-                  name="name"
-                  autoComplete="name"
-                  required
-                  minLength={2}
-                  maxLength={100}
-                  placeholder={tr("Tu nombre")}
-                />
-              </label>
-            )}
-            <label>
-              {tr("Correo electrónico")}
-              <input
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                placeholder="nombre@correo.com"
-              />
-            </label>
-            <label>
-              {tr("Contraseña")}
-              <input
-                name="password"
-                type="password"
-                autoComplete={create ? "new-password" : "current-password"}
-                required
-                minLength={10}
-                maxLength={128}
-                placeholder={tr("Al menos 10 caracteres")}
-              />
-            </label>
-            {error && (
-              <p className="error" role="alert">
-                {error}
-              </p>
-            )}
-            <button className="button primary" disabled={busy}>
-              {busy
-                ? "Conectando…"
-                : create
-                  ? tr("Crear cuenta")
-                  : tr("Iniciar sesión")}{" "}
-              <ArrowRight size={17} />
-            </button>
-          </form>
-          <div className="access-switch">
-            {create ? tr("¿Ya tienes cuenta?") : tr("¿Primera vez aquí?")}{" "}
-            <button
-              onClick={() => {
-                setCreate(!create);
-                setError("");
-              }}
-            >
-              {create ? tr("Inicia sesión") : tr("Crear cuenta")}
-            </button>
-          </div>
-          <a className="about-public" href="/about">
-            {tr("Acerca de SkyField y el grupo Jupiter")}
-          </a>
-        </div>
-      </section>
-      <div className="access-language">
-        <LanguageSwitch />
-      </div>
-    </main>
-  );
-}
 function SiteRow({ site, go }: { site: Site; go: Go }) {
   return (
     <button className="site-row" onClick={() => go("/lotes/" + site.id)}>
@@ -281,12 +139,9 @@ function Workspace() {
   }
   function loadUser() {
     setInitialError("");
-    void api<User>("/me")
+    void post<User>("/auth/guest")
       .then(signed)
-      .catch((err) => {
-        if (err instanceof ApiError && err.status === 401) signed(null);
-        else setInitialError(errorText(err));
-      });
+      .catch((err) => setInitialError(errorText(err)));
   }
   useEffect(loadUser, []);
   useEffect(() => {
@@ -325,8 +180,10 @@ function Workspace() {
       setReports(r);
       setError("");
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) signed(null);
-      else setError(errorText(err));
+      if (err instanceof ApiError && err.status === 401) {
+        signed(null);
+        loadUser();
+      } else setError(errorText(err));
     }
   }
   useEffect(() => {
@@ -354,7 +211,7 @@ function Workspace() {
         </button>
       </main>
     );
-  if (user === undefined)
+  if (user == null)
     return (
       <main className="empty app-empty">
         <Sprout size={31} />
@@ -373,25 +230,6 @@ function Workspace() {
         )}
       </main>
     );
-  if (user === null)
-    return path === "/about" ? (
-      <main className="main">
-        <Brand />
-        <LanguageSwitch />
-        <button className="back-link" onClick={() => go("/")}>
-          <ArrowLeft size={16} />
-          {tr(" Iniciar sesión")}
-        </button>
-        <About />
-      </main>
-    ) : (
-      <Access
-        onLogin={(u) => {
-          signed(u);
-          go("/");
-        }}
-      />
-    );
   const parts = path.split("/").filter(Boolean);
   const section = parts[0] ?? "";
   const title =
@@ -403,16 +241,6 @@ function Workspace() {
     setProfile(false);
   };
   const firstName = user.name.split(" ")[0];
-  async function close() {
-    try {
-      await post("/auth/logout");
-      signed(null);
-      setProfile(false);
-      go("/");
-    } catch (err) {
-      setError(errorText(err));
-    }
-  }
   return (
     <div className="shell">
       {menu && (
@@ -490,7 +318,6 @@ function Workspace() {
             {profile && (
               <div className="profile-menu card">
                 <b>{user.name}</b>
-                <small>{user.email}</small>
                 <button
                   className="button secondary"
                   onClick={() => {
@@ -500,10 +327,6 @@ function Workspace() {
                   }}
                 >
                   {tr("Ver guía")}
-                </button>
-                <button className="button secondary" onClick={close}>
-                  <LogOut size={16} />
-                  {tr(" Cerrar sesión")}
                 </button>
               </div>
             )}

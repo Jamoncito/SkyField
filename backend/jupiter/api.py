@@ -203,6 +203,19 @@ def login(body: Credentials, request: Request, response: Response):
         return auth.start_session(conn, request, response,
                                   {key: user[key] for key in ["id","name","email","guide_seen"]})
 
+@app.post("/api/auth/guest")
+def guest(request: Request, response: Response):
+    auth.validate_origin(request)
+    with engine.begin() as conn:
+        current = auth.session(conn, request, required=False)
+        if current:
+            return dict(current)
+        visitor_email = f"visitor-{uuid4().hex}@guest.skyfield.invalid"
+        user = one(conn, """INSERT INTO users(name,email,password_hash) VALUES(:n,:e,:p)
+                    RETURNING id,name,email,guide_seen""",
+                   n="SkyField visitor", e=visitor_email, p=auth.DUMMY)
+        return auth.start_session(conn, request, response, user)
+
 @app.post("/api/auth/logout", status_code=204)
 def logout(request: Request, user=Depends(write_user)):
     with engine.begin() as conn:
