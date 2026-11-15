@@ -5,6 +5,109 @@ import { api, day, errorText, n } from "./client";
 import type { ClimateContext, Weather } from "./types";
 import { Plot } from "./Chart";
 const months = tr("Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic").split(" ");
+const forecastLimits = {
+  temperature_2m_max: [-90, 65, "°C"],
+  temperature_2m_min: [-90, 65, "°C"],
+  temperature_2m_mean: [-90, 65, "°C"],
+  precipitation_sum: [0, 2500, "mm"],
+  precipitation_probability_max: [0, 100, "%"],
+  et0_fao_evapotranspiration: [0, 50, "mm"],
+  wind_speed_10m_max: [0, 500, "km/h"],
+} as const;
+
+async function directForecast(weather: Weather, signal: AbortSignal) {
+  const [longitude, latitude] = weather.point;
+  if (
+    !Number.isFinite(longitude) ||
+    !Number.isFinite(latitude) ||
+    Math.abs(longitude) > 180 ||
+    Math.abs(latitude) > 90
+  )
+    return null;
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    timezone: "America/La_Paz",
+    forecast_days: "7",
+    daily: Object.keys(forecastLimits).join(","),
+  });
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  signal.addEventListener("abort", cancel, { once: true });
+  if (signal.aborted) cancel();
+  const timeout = setTimeout(cancel, 15000);
+  let raw: {
+    daily?: Record<string, unknown>;
+    daily_units?: Record<string, unknown>;
+  } | null;
+  try {
+    const response = await fetch(
+      "https://api.open-meteo.com/v1/forecast?" + params,
+      {
+        signal: controller.signal,
+      },
+    );
+    if (!response.ok) return null;
+    raw = await response.json();
+  } finally {
+    clearTimeout(timeout);
+    signal.removeEventListener("abort", cancel);
+  }
+  const daily = raw?.daily;
+  const units = raw?.daily_units;
+  if (!daily || !units || !Array.isArray(daily.time)) return null;
+  const seen = new Set<string>();
+  const days: Weather["days"] = [];
+  for (const [index, stamp] of daily.time.entries()) {
+    if (
+      typeof stamp !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(stamp) ||
+      seen.has(stamp)
+    )
+      continue;
+    const date = new Date(stamp + "T00:00:00Z");
+    if (
+      !Number.isFinite(date.getTime()) ||
+      date.toISOString().slice(0, 10) !== stamp
+    )
+      continue;
+    seen.add(stamp);
+    const values = Object.fromEntries(
+      Object.entries(forecastLimits).map(([key, [low, high, unit]]) => {
+        const array = daily[key];
+        const value = Array.isArray(array) ? array[index] : null;
+        const valid =
+          typeof value === "number" &&
+          Number.isFinite(value) &&
+          value >= low &&
+          value <= high &&
+          units[key] === unit;
+        return [key, valid ? value : null];
+      }),
+    ) as Omit<Weather["days"][number], "date">;
+    if (
+      values.temperature_2m_min !== null &&
+      values.temperature_2m_max !== null &&
+      values.temperature_2m_min > values.temperature_2m_max
+    ) {
+      values.temperature_2m_min = null;
+      values.temperature_2m_max = null;
+    }
+    days.push({ date: stamp, ...values });
+  }
+  const validDays = days
+    .filter((row) =>
+      Object.entries(row).some(
+        ([key, value]) => key !== "date" && value !== null,
+      ),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 7);
+  return validDays.length
+    ? { ...weather, days: validDays, short_status: "available" }
+    : null;
+}
+
 export function WeatherPanel({
   fieldId,
   initial,
@@ -18,24 +121,39 @@ export function WeatherPanel({
 }) {
   const [weather, setWeather] = useState(initial),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [direct, setDirect] = useState(false);
   const [horizon, setHorizon] = useState<"week" | "month" | "season" | "cycle">(
     "week",
   );
   const request = useRef(0);
   const pending = useRef<AbortController | undefined>(undefined);
-  async function load() {
+  async function load(existing?: Weather) {
     const current = ++request.current;
     pending.current?.abort();
     const controller = new AbortController();
     pending.current = controller;
     setBusy(true);
     setError("");
+    setDirect(false);
     try {
-      const next = await api<Weather>("/fields/" + fieldId + "/weather", {
-        signal: controller.signal,
-      });
+      const next =
+        existing ??
+        (await api<Weather>("/fields/" + fieldId + "/weather", {
+          signal: controller.signal,
+        }));
       if (current === request.current) setWeather(next);
+      if (!next.days.length) {
+        try {
+          const fallback = await directForecast(next, controller.signal);
+          if (fallback && current === request.current) {
+            setWeather(fallback);
+            setDirect(true);
+          }
+        } catch {
+          // Keep the backend's seasonal outlook and explicit daily unavailability.
+        }
+      }
     } catch (e) {
       if (current === request.current) setError(errorText(e));
     } finally {
@@ -44,7 +162,8 @@ export function WeatherPanel({
   }
   useEffect(() => {
     setWeather(initial);
-    if (!initial) void load();
+    setDirect(false);
+    if (!initial || !initial.days.length) void load(initial);
     return () => {
       request.current++;
       pending.current?.abort();
@@ -143,6 +262,13 @@ export function WeatherPanel({
         <p className="muted">
           {tr(
             `${weather.days.length} días disponibles de 7. La dispersión estacional describe los modelos regionales. La precisión local requiere contraste con estaciones y registros del terreno.`,
+          )}
+        </p>
+      )}
+      {direct && (
+        <p className="muted">
+          {tr(
+            "Pronóstico diario consultado directamente desde tu navegador en Open-Meteo.",
           )}
         </p>
       )}
