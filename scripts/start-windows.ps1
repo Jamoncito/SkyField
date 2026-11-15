@@ -81,5 +81,5 @@ try {
         try {$healthy=(Invoke-RestMethod 'http://127.0.0.1:8080/api/health' -TimeoutSec 2).status -eq 'ok'} catch {Start-Sleep -Milliseconds 500}
     }
     if (!$healthy) {throw 'La API no pasó el chequeo de salud. Consulta .local/api.err.'}
-    Write-Host 'Júpiter Jr disponible en http://localhost:8080'
+    Write-Host 'SkyField disponible en http://localhost:8080'
 } finally {Pop-Location}

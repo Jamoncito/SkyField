@@ -22,7 +22,8 @@ def main():
     user=client.post("/auth/register",json={"email":f"recovery-{secrets.token_hex(5)}@example.org",
                                           "name":"Prueba de recuperación","password":password}).raise_for_status().json()
     client.headers["X-CSRF-Token"]=user["csrf"]
-    site=client.get("/fields").raise_for_status().json()[0]
+    site=client.post('/fields',json={'name':'Piloto de recuperación','geometry':{
+        'type':'Point','coordinates':[-63.272578418254845,-17.182537861479094]}}).raise_for_status().json()
     if args.windows_worker:
         import shutil
         shell=shutil.which("pwsh.exe") or "powershell.exe"

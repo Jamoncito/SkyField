@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, ArrowUpRight, ChevronDown, CloudSun, FileText, Globe2,
+import { Activity, ArrowDownToLine, ArrowLeft, ArrowRight, ChevronDown, FileText, Globe2,
   LayoutDashboard, Leaf, LogOut, MapPin, Menu, Plus, Sprout, X } from 'lucide-react';
 import { api,day,errorText,n,post,session,ApiError } from './client';
 import type { Report, RunSummary, Site, User } from './types';
@@ -7,6 +7,8 @@ import { FieldEditor } from './FieldEditor';
 import { Compare } from './Compare';
 import { OFFLINE_MAP } from './offline';
 import { GuidedTour } from './GuidedTour';
+import { SkyDashboard } from './Dashboard';
+import { CropLibrary } from './CropLibrary';
 
 const RegionalMap=lazy(()=>import('./Map'));
 
@@ -29,11 +31,12 @@ export type Go = (path:string)=>void;
 const navigation = [
   {name:'Panel',path:'/',Icon:LayoutDashboard},
   {name:'Mis lotes',path:'/lotes',Icon:MapPin},
+  {name:'Cultivos y mercados',path:'/cultivos',Icon:Sprout},
   {name:'Comparar rotaciones',path:'/comparar',Icon:Activity},
   {name:'Informes',path:'/informes',Icon:FileText},
 ];
 
-function Brand() {return <div className="brand"><img src="/favicon.svg" alt="" width="42" height="42"/><div><b>Júpiter Jr</b><small>Planificación agrícola</small></div></div>}
+function Brand() {return <div className="brand"><img src="/favicon.svg" alt="" width="42" height="42"/><div><b>SkyField</b><small>Planificación agrícola</small></div></div>}
 
 function Access({onLogin}:{onLogin:(u:User)=>void}) {
   const [create,setCreate]=useState(false), [busy,setBusy]=useState(false),[error,setError]=useState('');
@@ -43,11 +46,11 @@ function Access({onLogin}:{onLogin:(u:User)=>void}) {
     catch(err){setError(errorText(err));} finally{setBusy(false);}
   }
   return <main className="access"><aside className="access-photo"><Brand/><div><span className="eyebrow light"><span/> NASA POWER · AGRICULTURA</span>
-    <h1>El clima cambia.<br/>Tu rotación puede<br/>adaptarse.</h1><p>Explora cómo responderían tus cultivos con el clima histórico de tu zona.</p>
+    <h1>Planifica cultivos<br/>con datos de<br/>tu zona.</h1><p>Santa Cruz · Bolivia</p>
     </div><p className="image-credit">Imagen ilustrativa del paisaje agrícola</p></aside>
     <section className="access-body"><div className="mobile-brand"><Brand/></div><div className="access-form"><span className="eyebrow"><span/> TU ESPACIO DE TRABAJO</span>
-      <h2>{create?'Crea tu cuenta':'Bienvenido a Júpiter Jr'}</h2>
-      <p>{create?'Registra tu cuenta para explorar el lote piloto o agregar tu propio terreno.':'Inicia sesión para ver tus lotes y análisis.'}</p>
+      <h2>{create?'Comienza con tu tierra':'Bienvenido a SkyField'}</h2>
+      <p>{create?'Crea tu primer lote con una guía práctica, paso a paso.':'Clima, suelo y rentabilidad para planificar tu próxima cosecha.'}</p>
       <form onSubmit={submit}>
         {create&&<label>Nombre visible<input name="name" autoComplete="name" required minLength={2} maxLength={100} placeholder="Tu nombre"/></label>}
         <label>Correo electrónico<input name="email" type="email" autoComplete="email" required placeholder="nombre@correo.com"/></label>
@@ -57,38 +60,6 @@ function Access({onLogin}:{onLogin:(u:User)=>void}) {
       </form>
       <div className="access-switch">{create?'¿Ya tienes cuenta?':'¿Primera vez aquí?'} <button onClick={()=>{setCreate(!create);setError('');}}>{create?'Inicia sesión':'Crear cuenta'}</button></div>
     </div></section></main>;
-}
-
-function Dashboard({user,sites,runs,reports,go}:{user:User;sites:Site[];runs:RunSummary[];reports:Report[];go:Go}) {
-  const pilot=sites.find(x=>x.pilot);
-  const ready=runs.filter(r=>r.status==='done');
-  return <>
-    <section className="hero" data-tour="dashboard">
-      <div className="hero-content"><span className="eyebrow light"><span/> PLANIFICACIÓN DE CULTIVOS</span>
-        <h1>Planifica tu próxima<br/>rotación</h1>
-        <p>Ubica tu lote, compara tres campañas con clima histórico y lleva la evidencia a tu próxima decisión.</p>
-        <button className="button lime" onClick={()=>go(pilot?'/lotes/'+pilot.id:'/lotes/nuevo')}>{pilot?'Explorar lote piloto':'Crear un lote'} <ArrowRight size={18}/></button>
-      </div>
-      <div className="hero-meta"><Globe2 size={15}/> Imagen ilustrativa · Bolivia</div>
-    </section>
-    <div className="metrics">
-      {[
-        {Icon:MapPin,title:'Lotes guardados',value:sites.length,sub:'Abre el mapa y edita tus límites',path:'/lotes'},
-        {Icon:Activity,title:'Análisis terminados',value:ready.length,sub:'Historial de tus comparaciones',path:'/comparar'},
-        {Icon:FileText,title:'Informes listos',value:reports.filter(r=>r.ready).length,sub:'Descargas en PDF y CSV',path:'/informes'}
-      ].map(({Icon,title,value,sub,path})=><button className="metric card" key={title} onClick={()=>go(path)}><span className="metric-icon"><Icon size={19}/></span><ArrowUpRight className="metric-arrow" size={17}/><span className="metric-label">{title}</span><strong>{value}</strong><span className="muted">{sub}</span></button>)}
-    </div>
-    <div className="dashboard-bottom">
-      <section className="card panel"><div className="section-head"><div><h2>Tus lotes</h2><p>Terrenos que puedes abrir y analizar.</p></div><button className="button secondary small" onClick={()=>go('/lotes/nuevo')}><Plus size={16}/> Nuevo lote</button></div>
-        {sites.length ? sites.slice(0,3).map(s=><SiteRow site={s} go={go} key={s.id}/>) : <p className="muted">Agrega un punto o dibuja un terreno para comenzar.</p>}
-      </section>
-      <section className="card panel mission"><div className="mission-icon"><CloudSun size={23}/></div><h2>Clima de referencia</h2>
-        <p>El punto piloto usa el histórico diario de NASA POWER de 2015 a 2025. Consulta sus unidades y cobertura en cada análisis.</p>
-        {pilot&&<button className="text-button" onClick={()=>go('/lotes/'+pilot.id+'/analizar')}>Preparar análisis <ArrowRight size={16}/></button>}
-      </section>
-    </div>
-    {ready.length>0&&<section className="card panel"><div className="section-head"><div><h2>Último análisis</h2><p>{ready[0].field_name} · {day(ready[0].created)}</p></div><button className="button secondary" onClick={()=>go('/comparar/'+ready[0].id)}>Ver resultados <ArrowRight size={16}/></button></div></section>}
-  </>;
 }
 
 function SiteRow({site,go}:{site:Site;go:Go}) {
@@ -105,9 +76,10 @@ function Workspace() {
   const [sites,setSites]=useState<Site[]>([]),[runs,setRuns]=useState<RunSummary[]>([]),[reports,setReports]=useState<Report[]>([]);
   const [error,setError]=useState(''),[menu,setMenu]=useState(false),[profile,setProfile]=useState(false);
   const [showGuide,setShowGuide]=useState(false);
+  const [guideField,setGuideField]=useState<string>();
   const guideClaim=useRef('');
   const [slow,setSlow]=useState(false);
-  function signed(u:User|null){session(u);setUser(u);}
+  function signed(u:User|null){session(u);setUser(u);if(!u){setShowGuide(false);setGuideField(undefined);guideClaim.current='';}}
   function loadUser(){setInitialError('');void api<User>('/me').then(signed).catch(err=>{
     if(err instanceof ApiError&&err.status===401)signed(null);else setInitialError(errorText(err));});}
   useEffect(loadUser,[]);
@@ -133,8 +105,8 @@ function Workspace() {
     return ()=>clearInterval(timer);
   },[user,runs,reports]);
 
-  if(initialError) return <main className="empty app-empty"><Sprout size={31}/><h1>Abriendo Júpiter Jr</h1><p>{initialError}</p><button className="button primary" onClick={loadUser}>Reintentar</button></main>;
-  if(user===undefined)return <main className="empty app-empty"><Sprout size={31}/><h1>Conectando con Júpiter Jr</h1>
+  if(initialError) return <main className="empty app-empty"><Sprout size={31}/><h1>Abriendo SkyField</h1><p>{initialError}</p><button className="button primary" onClick={loadUser}>Reintentar</button></main>;
+  if(user===undefined)return <main className="empty app-empty"><Sprout size={31}/><h1>Conectando con SkyField</h1>
     <p>{slow?'El alojamiento gratuito puede tardar alrededor de un minuto en activarse después de una pausa.':'Abriendo tu espacio de planificación…'}</p>
     {slow&&<button className="button secondary" onClick={loadUser}>Reintentar conexión</button>}</main>;
   if(user===null)return <Access onLogin={u=>{signed(u);go('/');}}/>;
@@ -162,14 +134,15 @@ function Workspace() {
         <div className="breadcrumb"><button data-tour="mobile-navigation" className="icon-btn mobile-menu" aria-label="Abrir menú" onClick={()=>setMenu(!menu)}>{menu?<X size={20}/>:<Menu size={20}/>}</button>
           <span className="crumb-home">Espacio de trabajo</span><span className="slash">/</span><strong>{title}</strong></div>
         <div className="profile-wrap"><button data-tour="profile" className="profile" aria-expanded={profile} onClick={()=>setProfile(!profile)}><span className="avatar">{user.name[0].toUpperCase()}</span><b>{firstName}</b><ChevronDown size={14}/></button>
-          {profile&&<div className="profile-menu card"><b>{user.name}</b><small>{user.email}</small><button className="button secondary" onClick={()=>{route('/');setShowGuide(true);}}>Ver guía</button><button className="button secondary" onClick={close}><LogOut size={16}/> Cerrar sesión</button></div>}</div>
+          {profile&&<div className="profile-menu card"><b>{user.name}</b><small>{user.email}</small><button className="button secondary" onClick={()=>{route('/');setGuideField(undefined);setShowGuide(true);}}>Ver guía</button><button className="button secondary" onClick={close}><LogOut size={16}/> Cerrar sesión</button></div>}</div>
       </header>
       <main className="main">
         {error&&<div className="error" role="alert">{error} <button className="text-button" onClick={refresh}>Reintentar</button></div>}
-        {section===''&&<Dashboard user={user} sites={sites} runs={runs} reports={reports} go={route}/>}
+        {section===''&&<SkyDashboard user={user} sites={sites} runs={runs} reports={reports} go={route}/>}
+        {section==='cultivos'&&<CropLibrary/>}
         {section==='lotes'&&!parts[1]&&<><div className="page-heading" data-tour="lots"><div><h1>Mis lotes</h1><p>Dibuja tu terreno o guarda un punto de consulta exploratorio.</p></div><button className="button primary" onClick={()=>route('/lotes/nuevo')}><Plus size={18}/> Nuevo lote</button></div>
           <section className="card panel">{sites.length?sites.map(s=><SiteRow site={s} go={route} key={s.id}/>):<p className="muted">Todavía no hay lotes guardados.</p>}</section></>}
-        {section==='lotes'&&parts[1]&&<FieldEditor key={parts[1]} id={parts[1]==='nuevo'?null:parts[1]} analyzing={parts[2]==='analizar'} go={route} refresh={refresh}/>}
+        {section==='lotes'&&parts[1]&&<FieldEditor key={parts[1]} id={parts[1]==='nuevo'?null:parts[1]} analyzing={parts[2]==='analizar'} go={route} refresh={refresh} onSaved={s=>{if(showGuide)setGuideField(s.id);}}/>}
         {section==='comparar'&&parts[1]&&<Compare key={parts[1]} id={parts[1]} summary={runs.find(r=>r.id===parts[1])} go={route} refresh={refresh}/>}
         {section==='comparar'&&!parts[1]&&<><div className="page-heading" data-tour="runs"><div><h1>Comparar rotaciones</h1><p>Consulta los escenarios y recupera análisis guardados.</p></div><button className="button primary" onClick={()=>route('/lotes')}><MapPin size={17}/> Elegir lote</button></div>
           <section className="card panel">{runs.length?runs.map(run=><button key={run.id} className="site-row" onClick={()=>route('/comparar/'+run.id)}><span className="site-icon"><Activity size={19}/></span><span className="site-name"><b>{run.field_name}</b><small>{day(run.created)}</small></span><StatusChip status={run.status}/><ArrowRight size={17}/></button>):<Empty icon="analysis" title="Tu primera comparación" text="Abre un lote y selecciona Analizar para comparar rotaciones."/>}</section></>}
@@ -179,8 +152,7 @@ function Workspace() {
             <a className="button secondary small" href={'/api/reports/'+r.id+'/daily'}>Serie diaria</a></div>:['failed','cancelled'].includes(r.status)&&<button className="button secondary small" onClick={()=>void post('/jobs/'+r.job_id+'/retry').then(refresh).catch(e=>setError(errorText(e)))}>Reintentar</button>}</article>):<Empty icon="report" title="Aún no hay informes" text="Abre una comparación y selecciona la rotación que quieres exportar."/>}</section></>}
       </main>
     </div>
-    {showGuide&&sites.length>0&&<GuidedTour pilot={(sites.find(s=>s.pilot)??sites[0]).id}
-      run={runs.find(r=>r.status==='done')?.id} navigate={route} onFinish={()=>{setShowGuide(false);route('/');}}/>}
+    {showGuide&&<GuidedTour pilot={guideField} navigate={route} onFinish={()=>setShowGuide(false)}/>}
   </div>;
 }
 

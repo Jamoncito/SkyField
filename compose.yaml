@@ -1,9 +1,9 @@
-name: jupiter-jr
+name: skyfield
 x-backend: &backend
   build:
     context: .
     dockerfile: backend/Dockerfile
-  image: jupiter-jr-backend:1.2.1
+  image: skyfield-backend:2.0.0
   environment:
     DATABASE_URL: postgresql+psycopg://jupiter:${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD en .env}@db:5432/jupiter
     PRIVATE_STORAGE: /private

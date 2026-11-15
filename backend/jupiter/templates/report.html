@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="es"><meta charset="utf-8"><title>Informe de rotación · Júpiter Jr</title>
+<html lang="es"><meta charset="utf-8"><title>Informe de rotación · SkyField</title>
 <style>
 @page {size:A4;margin:13mm 14mm 17mm}
 *{box-sizing:border-box} body{margin:0;font:10pt Arial,sans-serif;color:#163629;line-height:1.38}
-header{min-height:33px;margin-bottom:6mm;break-inside:avoid;font-size:15pt;font-weight:700}
+header{min-height:33px;margin-bottom:5mm;break-inside:avoid;font-size:15pt;font-weight:700}
 header img{width:33px;height:33px;vertical-align:middle;margin-right:9px}
 header small{font-size:8pt;font-weight:400;color:#546c5f;margin-left:5mm}
 .hero{background:#123a2c;color:white;padding:7mm;border-radius:4mm;margin-bottom:5mm}
@@ -14,12 +14,12 @@ header small{font-size:8pt;font-weight:400;color:#546c5f;margin-left:5mm}
 .card p{margin:1.4mm 0} h2{font-size:14pt;margin:3mm 0 2mm} h3{margin:0 0 1.5mm;font-size:11pt}
 .map{width:100%;height:36mm;object-fit:cover;border-radius:2mm}
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin-bottom:4mm}.kpi strong{font-size:17pt;display:block}
-.plot{width:100%;height:61mm;object-fit:contain;display:block;margin-bottom:1mm}.plot.comparison{height:52mm}.source{font-size:8pt;color:#536d5d;margin:0;overflow-wrap:anywhere}
-table{border-collapse:collapse;width:100%;font-size:9pt;margin-bottom:3mm} td,th{text-align:left;border-bottom:1px solid #dde7db;padding:2mm}
+.plot{width:100%;height:61mm;object-fit:contain;display:block;margin-bottom:1mm}.plot.comparison{height:45mm}.source{font-size:8pt;color:#536d5d;margin:0;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%;font-size:9pt;margin-bottom:3mm} td,th{text-align:left;border-bottom:1px solid #dde7db;padding:1.3mm}
 th{background:#e9f0e6}.chosen{background:#e8f2d5}.report-page+.report-page{break-before:page} section,table,tr{break-inside:avoid}
 ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;background:#eef3e6;border-radius:2mm;margin-top:3mm}
 </style><body><article class="report-page">
-<header><img src="{{logo}}" alt="">Júpiter Jr <small>Informe {{item.id|string|truncate(13,True,'')}} · {{item.created.date().isoformat()}}</small></header>
+<header><img src="{{logo}}" alt="">SkyField <small>Informe {{item.id|string|truncate(13,True,'')}} · {{item.created.date().isoformat()}}</small></header>
 <div class="hero"><div class="tag">{{output.status}} · Catálogo ilustrativo</div><h1>Informe de rotación agrícola</h1><p>{{field.name}} · {{item.producer}}</p></div>
 <div class="grid"><div class="card"><h3>Ficha del lote</h3><p>{{'%.6f'|format(field.lat)}}°, {{'%.6f'|format(field.lon)}}° · WGS 84</p>
 <p>{% if field.area_ha %}{{'%.2f'|format(field.area_ha)}} ha{% else %}Punto exploratorio · perímetro pendiente{% endif %}</p>
@@ -27,8 +27,9 @@ ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;b
 <h2>{{selected.names|join(' → ')}}</h2>
 <div class="kpis">{% for key in ['deficit_mm','stress_days','cover_pct'] %}{% set v=selected.metrics.historical[key] %}<div class="card kpi">{{metrics[key][0]}}<strong>{{v if v is not none else 'Pendiente'}}{% if v is not none %} <small>{{metrics[key][1]}}</small>{% endif %}</strong></div>{% endfor %}</div>
 <h2>Clima histórico del punto</h2><img class="plot" src="{{chart}}" alt="Clima histórico mensual"><p class="source">{{output.source.product}} · {{output.source.start}} a {{output.source.end}} · {{output.source.time_standard}} · {{output.source.rows}} días · {{output.source.support}}</p>
+<p class="source" style="margin-top:4mm">{{output.limitations|join(' ')}}</p>
 </article><article class="report-page">
-<header>Júpiter Jr <small>Comparación y procedencia</small></header>
+<header>SkyField <small>Comparación y procedencia</small></header>
 <h2>Comparación de tres campañas</h2><img class="plot comparison" src="{{comparison}}" alt="Déficit y cobertura por alternativa">
 <table><thead><tr><th>Rotación</th><th>Puntaje</th><th>Déficit (mm)</th><th>Cobertura</th></tr></thead><tbody>
 {% for r in output.alternatives + ([output.reference] if output.reference else []) %}<tr class="{{'chosen' if r.id==selected.id else ''}}"><td>{% if r.id=='reference' %}Referencia · {% endif %}{{r.names|join(' → ')}}</td><td>{{r.score}}</td><td>{{r.metrics.historical.deficit_mm if r.metrics.historical.deficit_mm is not none else 'Pendiente'}}</td><td>{{r.metrics.historical.cover_pct}} %</td></tr>{% endfor %}</tbody></table>
@@ -39,11 +40,10 @@ ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;b
 {% if output.excluded %}<p>{% for crop,reasons in output.excluded.items() %}{{crop}}: {{reasons|join(' ')}} {% endfor %}</p>{% endif %}
 <ul>{% for a in output.actions %}<li><b>{{a.item}}.</b> {{a.reason}}</li>{% endfor %}</ul>
 <h3>Calidad y procedencia</h3><p class="source">Pesos nominales: agua {{(100*output.weights[0])|round|int}} %, cobertura {{(100*output.weights[1])|round|int}} %, diversidad {{(100*output.weights[2])|round|int}} %. {% if selected.metrics.sensitivity.deficit_mm is not none %}Déficit medio bajo sensibilidad: {{selected.metrics.sensitivity.deficit_mm}} mm.{% endif %}</p><p class="source">Análisis {{item.run_id}} · Versión {{output.version}} · Catálogo {{output.catalog_version}} · FAO 56. {{output.source.missing_days}} días ausentes y {{output.source.incomplete_days}} observaciones incompletas.<br>SHA-256 {{output.source.sha256}}</p>
-<p class="source" style="margin-top:2mm">{{output.limitations|join(' ')}}</p>
 </article>
 {% if selected.recommendation %}
 <article class="report-page">
-<header>Júpiter Jr <small>Orientación para el productor</small></header>
+<header>SkyField <small>Orientación para el productor</small></header>
 <h2>Recomendaciones basadas en el análisis</h2>
 <div class="card"><h3>{{selected.recommendation.title}}</h3><p><b>{{selected.names|join(' → ')}}</b></p>
 <ul>{% for reason in selected.recommendation.reasons %}<li>{{reason}}</li>{% endfor %}</ul>
@@ -59,7 +59,7 @@ ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;b
 {% endif %}
 {% if output.environment %}
 <article class="report-page">
-<header>Júpiter Jr <small>Condiciones y meses críticos</small></header>
+<header>SkyField <small>Condiciones y meses críticos</small></header>
 <h2>Integración de clima y humedad regional</h2><p>{{output.environment.alignment}} {{output.environment.method}}</p>
 <h3>Comparación de tendencias</h3><table><thead><tr><th>Variable</th><th>Lineal / década</th><th>Theil–Sen / década</th><th>Unidad</th><th>Años</th></tr></thead><tbody>
 {% for t in output.environment.trends %}<tr><td>{{t.label}}</td><td>{{t.ols_decade}}</td><td>{{t.sen_decade}}</td><td>{{t.unit}}</td><td>{{t.start}}–{{t.end}}</td></tr>{% endfor %}</tbody></table>
@@ -72,6 +72,40 @@ ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;b
 <h3>Interpretación y validación local</h3><p>La evapotranspiración representa evaporación del suelo y transpiración de las plantas. ET₀ indica demanda atmosférica de referencia. El déficit compara demanda y consumo simulado. Los meses con lluvia menor que ET₀ orientan la revisión de agua disponible.</p>
 <p>La humedad de MERRA-2 es una estimación regional relativa. El mapa ofrece contexto satelital de vegetación, lluvia, humedad, temperatura superficial, biomasa leñosa y relieve. Las mediciones de campo aportan profundidad y condiciones del terreno para contrastar estos resultados.</p>
 <p class="source">Fuentes climáticas y métodos · <a href="https://power.larc.nasa.gov/docs/methodology/data/sources/">NASA POWER</a> · <a href="https://power.larc.nasa.gov/docs/methodology/data/sources_hydrology/">NASA POWER MERRA-2</a> · <a href="https://www.fao.org/4/x0490e/x0490e00.htm">FAO 56</a>. Catálogo regional · <a href="https://ice.santacruz.gob.bo/uploads/SANTA_CRUZ_ESTADISTICO_2024_a8a96110b3.pdf">ICE 2024, página 47, fuente INE</a>.</p>
+</article>
+{% endif %}
+{% if output.economics and selected.economics %}
+{% set economic=output.economics %}{% set budget=selected.economics %}
+<article class="report-page">
+<header>SkyField <small>Evaluación económica del lote</small></header>
+<h2>Presupuesto de tres campañas anuales</h2><p><b>{{selected.names|join(' → ')}}</b> · valores por hectárea · precios constantes.</p>
+<div class="kpis">{% for key,label in [('revenue_bob_ha','Ingreso bruto'),('cost_bob_ha','Costo total'),('net_bob_ha','Utilidad estimada')] %}<div class="card kpi">{{label}}<strong>{% if budget[key] is not none %}Bs {{'%.0f'|format(budget[key])}}{% else %}Pendiente{% endif %}</strong></div>{% endfor %}</div>
+<table><thead><tr><th>Campaña</th><th>Precio Bs/t</th><th>Rendimiento t/ha</th><th>Costo Bs/ha</th><th>Utilidad Bs/ha</th></tr></thead><tbody>{% for row in budget.campaigns %}<tr><td>{{selected.names[loop.index0]}}</td>{% for key in ['price_bob_t','yield_t_ha','cost_bob_ha','net_bob_ha'] %}<td>{{'%.2f'|format(row[key]) if row[key] is not none else 'Pendiente'}}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+<h3>Rendimiento y precio de equilibrio</h3><table><thead><tr><th>Campaña</th><th>Equilibrio Bs/t</th><th>Equilibrio t/ha</th><th>Origen del precio y rendimiento</th></tr></thead><tbody>{% for row in budget.campaigns %}<tr><td>{{selected.names[loop.index0]}}</td><td>{{row.break_even_price if row.break_even_price is not none else 'Pendiente'}}</td><td>{{row.break_even_yield if row.break_even_yield is not none else 'Pendiente'}}</td><td>{{row.price_origin}}. {{row.yield_origin}}. {{row.cost_origin}}.</td></tr>{% endfor %}</tbody></table>
+{% if budget.net_bob_ha is not none %}<p>Utilidad equivalente {{budget.net_usd_ha}} USD/ha. ROI {{budget.roi_pct if budget.roi_pct is not none else 'pendiente'}} %. Escenario adverso {{budget.downside_bob_ha}} Bs/ha con precio y rendimiento −20 % cada uno y costo +20 %. {% if budget.net_field_bob is not none %}Utilidad del área delimitada {{budget.net_field_bob}} Bs.{% endif %}</p>{% endif %}
+<h3>Comparación de las alternativas mostradas</h3><table><thead><tr><th>Rotación</th><th>Puntos agronómicos</th><th>Ingreso Bs/ha</th><th>Utilidad Bs/ha</th></tr></thead><tbody>{% for r in output.alternatives %}<tr><td>{{r.names|join(' → ')}}</td><td>{{r.score}}</td><td>{{r.economics.revenue_bob_ha if r.economics.revenue_bob_ha is not none else 'Pendiente'}}</td><td>{{r.economics.net_bob_ha if r.economics.net_bob_ha is not none else 'Pendiente'}}</td></tr>{% endfor %}</tbody></table>
+<p class="source">{{economic.method}} {{economic.uncertainty}}</p><p class="source">Tipo de cambio usado {{economic.settings.bob_per_usd or economic.market.fx.bob_per_usd}} Bs/USD. Referencia BCB {{economic.market.fx.date}}, vigencia hasta {{economic.market.fx.valid_until}}. Descuento mayorista a finca {{economic.settings.farmgate_discount_pct or 0}} %. Mercado verificado {{economic.market.verified}}.</p>
+<p class="source">{% for source in economic.market.sources.values() %}<a href="{{source.url}}">{{source.name}}</a> ({{source.date}}). {% endfor %}<a href="{{economic.market.fx.url}}">Banco Central de Bolivia</a>.</p>
+</article>
+{% endif %}
+{% if output.enso and output.enso.status=='available' %}
+<article class="report-page">
+<header>SkyField <small>Cambio climático y sensibilidad ENSO</small></header>
+<h2>Impacto sobre el balance hídrico</h2><p>Contraste exploratorio de condiciones muy fuertes con RONI +2 y −2 °C, asociado al Pacífico Niño 3.4. Respuesta local ajustada con NASA POWER y NOAA, {{output.enso.start}}–{{output.enso.end}}.</p>
+<table><thead><tr><th>Escenario</th><th>Déficit mm</th><th>Cambio del déficit</th><th>Días con déficit</th><th>Días ≥35 °C</th></tr></thead><tbody>{% for key,label in [('historical','Histórico'),('sensitivity','Cambio personalizado'),('elnino','Súper Niño'),('lanina','Súper Niña')] %}{% if selected.metrics[key] is defined %}{% set m=selected.metrics[key] %}{% set base=selected.metrics.historical.deficit_mm %}<tr><td>{{label}}</td><td>{{m.deficit_mm if m.deficit_mm is not none else 'Pendiente'}}</td><td>{% if base is not none and base>0 and m.deficit_mm is not none %}{{'%.1f'|format(100*(m.deficit_mm-base)/base)}} %{% else %}Consultar diferencia absoluta{% endif %}</td><td>{{m.stress_days}}</td><td>{{m.hot_days}}</td></tr>{% endif %}{% endfor %}</tbody></table>
+<p>Un aumento de déficit indica más demanda de agua sin cubrir en el suelo simulado. Contrasta cultivos de menor demanda, rastrojo y calendario. Una lluvia mayor exige revisar drenaje y oportunidad de labores con observaciones locales.</p>
+<h3>Respuesta mensual asociada a ENSO</h3><table><thead><tr><th>Mes</th><th>Niño lluvia (%)</th><th>Niño temp. (°C)</th><th>Niña lluvia (%)</th><th>Niña temp. (°C)</th><th>Años</th></tr></thead><tbody>{% for month in output.enso.months %}<tr><td>{{month.month}}</td><td>{{month.elnino.rain_pct}}</td><td>{{month.elnino.temp_c}}</td><td>{{month.lanina.rain_pct}}</td><td>{{month.lanina.temp_c}}</td><td>{{month.n}}</td></tr>{% endfor %}</tbody></table>
+<h3>Método e incertidumbre</h3><p>{{output.enso.method}}</p><p>{{output.enso.uncertainty}}</p><p>{{output.enso.climate_change}}</p><p class="source"><a href="{{output.enso.source_url}}">NASA POWER mensual</a>. <a href="{{output.enso.index_url}}">NOAA CPC RONI</a>. La vista web conserva los intervalos por mes y la marca de extrapolación.</p>
+</article>
+{% endif %}
+{% if output.weather %}{% set weather=output.weather %}
+<article class="report-page">
+<header>SkyField <small>Pronóstico y planificación del ciclo</small></header>
+<h2>Pronóstico de siete días</h2><p>Consulta {{weather.retrieved[:19]|replace('T',' ')}} UTC. Punto {{weather.point|join(', ')}}.</p>
+{% if weather.days %}<table><thead><tr><th>Fecha</th><th>Mínima °C</th><th>Máxima °C</th><th>Lluvia mm</th><th>Prob. lluvia %</th><th>ET₀ mm</th></tr></thead><tbody>{% for d in weather.days %}<tr><td>{{d.date}}</td><td>{{d.temperature_2m_min}}</td><td>{{d.temperature_2m_max}}</td><td>{{d.precipitation_sum}}</td><td>{{d.precipitation_probability_max}}</td><td>{{d.et0_fao_evapotranspiration}}</td></tr>{% endfor %}</tbody></table>{% else %}<p>La fuente diaria no entregó datos en esta consulta.</p>{% endif %}
+{% if weather.month and weather.month.rain_mm %}<h3>Próximos {{weather.month.days}} días</h3><p>Lluvia P10 / P50 / P90 {{weather.month.rain_mm|join(' / ')}} mm. Temperatura media P10 / P50 / P90 {{weather.month.temp_c|join(' / ')}} °C. {{weather.month.members}} miembros. Intervalo {{weather.month.start}} a {{weather.month.end}}.</p>{% endif %}
+{% if weather.seasonal %}<h3>Perspectiva estacional del conjunto</h3><table><thead><tr><th>Mes</th><th>Días cubiertos</th><th>Lluvia P10 / P50 / P90 (mm)</th><th>Temp. P10 / P50 / P90 (°C)</th></tr></thead><tbody>{% for m in weather.seasonal %}<tr><td>{{m.month}}</td><td>{{m.days}}</td><td>{{m.rain_mm|join(' / ') if m.rain_mm else 'Sin dato'}}</td><td>{{m.temp_c|join(' / ') if m.temp_c else 'Sin dato'}}</td></tr>{% endfor %}</tbody></table>{% endif %}
+<p>{{weather.method}}</p><p>{{weather.interpretation}}</p><p>Las barras y percentiles permiten reconocer incertidumbre y preparar opciones. Verifica humedad, alertas locales, viento y estado del cultivo al acercarse la labor.</p><p class="source"><a href="{{weather.source_url}}">Open-Meteo, pronóstico</a>. <a href="{{weather.seasonal_url}}">Open-Meteo, perspectiva estacional</a>. <a href="https://senamhi.gob.bo/">SENAMHI Bolivia</a>.</p>
 </article>
 {% endif %}
 </body></html>

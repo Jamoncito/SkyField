@@ -15,6 +15,7 @@ from .evidence import moisture
 from .signals import environmental_signals, simulation_timeline
 from .report import render
 from .storage import persist, restore
+from .outlook import climate_context, weather_outlook
 
 LOG = logging.getLogger("jupiter.worker")
 
@@ -132,10 +133,12 @@ def do_analysis(job, progress):
             FROM campaigns c JOIN imports i ON i.id=c.import_id WHERE c.field_id=:f AND i.field_version=:v AND i.created<=:cutoff
             ORDER BY c.harvest_date DESC LIMIT 100
         """, f=run["field_id"], v=run["field_version"], cutoff=run["input_cutoff"] or run["created"])
-    output, daily = run_model(rows,dataset["metadata"],site,run["inputs"],run["inputs"].get("regional_soil"))
+    context = climate_context(site["lon"],site["lat"])
+    output, daily = run_model(rows,dataset["metadata"],site,run["inputs"],run["inputs"].get("regional_soil"),context)
     progress(82)
     output["moisture"] = moisture(site["lon"],site["lat"])
     output["environment"] = environmental_signals(rows,dataset["metadata"],site,output["elevation_m"],output["moisture"])
+    output["weather"] = weather_outlook(site["lon"],site["lat"])
     for option in output["alternatives"]:
         option["timeline"] = simulation_timeline(daily[option["id"]])
     output.update(dataset_id=str(dataset["id"]),soil=soil,campaigns=campaigns)
@@ -211,7 +214,7 @@ def process(job):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    LOG.info("Procesador de Júpiter Jr listo")
+    LOG.info("Procesador de SkyField listo")
     while True:
         try:
             with engine.begin() as conn:

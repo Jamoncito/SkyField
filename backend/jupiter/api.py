@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from typing import Literal
 from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
@@ -13,14 +14,14 @@ from sqlalchemy.exc import IntegrityError
 from . import auth
 from .climate import CAMPAIGN, COLS, LIMIT, SOIL, inspect, keep_file
 from .db import ROOT, STORAGE, engine, many, one, query
-from .geometry import FIELD_COLUMNS, save_field, seed_pilot
+from .geometry import FIELD_COLUMNS, save_field
 from .jobs import JobError, enqueue
 from .model import CROPS
 from .catalog import CONTEXT, catalog
 from .soil import lookup
 
 LOG = logging.getLogger("jupiter.api")
-app = FastAPI(title="Júpiter Jr", version="1.2.1", docs_url="/api/docs",
+app = FastAPI(title="SkyField", version="2.0.0", docs_url="/api/docs",
               openapi_url="/api/openapi.json", redoc_url=None)
 
 class Credentials(BaseModel):
@@ -42,7 +43,42 @@ class FieldInput(BaseModel):
     source: str = Field(default="dibujo manual", max_length=80)
     version: int | None = Field(default=None, ge=1)
 
+class CropBudgetInput(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+    sale_bob_t: float | None = Field(default=None, ge=0, le=100000000)
+    yield_t_ha: float | None = Field(default=None, ge=0, le=500)
+    cost_bob_ha: float | None = Field(default=None, ge=0, le=100000000)
+
+
+class EconomicSettings(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+    yield_year: Literal[2022,2023,2024] = 2024
+    farmgate_discount_pct: float = Field(default=0, ge=0, le=100)
+    bob_per_usd: float | None = Field(default=None, gt=0, le=1000)
+    budgets: dict[str,CropBudgetInput] = Field(default_factory=dict, max_length=len(CROPS))
+
+    @field_validator("budgets")
+    @classmethod
+    def valid_crops(cls, value):
+        if not value.keys() <= CROPS.keys():
+            raise ValueError("El presupuesto contiene un cultivo desconocido")
+        return value
+
+
+class PerennialInput(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+    crop: Literal["coffee","cacao","vanilla","pitaya","acai"]
+    establishment_bob_ha: float = Field(ge=0, le=100000000)
+    annual_cost_bob_ha: float = Field(ge=0, le=100000000)
+    sale_bob_t: float = Field(ge=0, le=100000000)
+    yield_t_ha: float = Field(ge=0, le=500)
+    first_harvest_year: int = Field(ge=1, le=20)
+    horizon_years: int = Field(default=10, ge=1, le=30)
+    discount_pct: float = Field(default=10, ge=0, le=100)
+
+
 class AnalysisInput(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False)
     previous: str = Field(default="unknown", max_length=20)
     allowed_crops: list[str] | None = Field(default=None, min_length=3, max_length=len(CROPS))
     use_regional_soil: bool = False
@@ -60,6 +96,7 @@ class AnalysisInput(BaseModel):
     trial: bool = False
     rainfall_shift_pct: float = Field(default=-15, ge=-60, le=60)
     warming_c: float = Field(default=1, ge=-4, le=6)
+    economics: EconomicSettings = Field(default_factory=EconomicSettings)
 
     @field_validator("previous")
     @classmethod
@@ -144,7 +181,6 @@ def register(body: Registration, request: Request, response: Response):
         with engine.begin() as conn:
             user = one(conn, """INSERT INTO users(name,email,password_hash) VALUES(:n,:e,:p)
                     RETURNING id,name,email,guide_seen""", n=body.name, e=email, p=auth.PASSWORDS.hash(body.password))
-            seed_pilot(conn, user["id"])
             return auth.start_session(conn, request, response, user)
     except IntegrityError as exc:
         if getattr(exc.orig, "sqlstate", "") == "23505":
@@ -194,6 +230,30 @@ def fields(offset: int = 0, user=Depends(read_user)):
     with engine.connect() as conn:
         return many(conn, f"SELECT {FIELD_COLUMNS} FROM fields WHERE owner=:o ORDER BY updated DESC LIMIT 100 OFFSET :skip",
                     o=user["id"], skip=max(offset, 0))
+
+
+@app.get("/api/markets")
+def markets(user=Depends(read_user)):
+    from .economics import market_database
+    return market_database()
+
+
+@app.post("/api/perennial-budget")
+def perennial_budget(body: PerennialInput, user=Depends(write_user)):
+    from .economics import perennial_cashflow
+    if body.first_harvest_year > body.horizon_years:
+        raise HTTPException(422, "El horizonte debe alcanzar el primer año de cosecha.")
+    return perennial_cashflow(body)
+
+
+@app.get("/api/fields/{field_id}/weather")
+def field_weather(field_id: UUID, user=Depends(read_user)):
+    from .outlook import weather_outlook
+    with engine.connect() as conn:
+        row = one(conn, f"SELECT {FIELD_COLUMNS} FROM fields WHERE id=:f AND owner=:o", f=field_id, o=user["id"])
+    if not row:
+        raise HTTPException(404, "No encontramos este lote en tu cuenta.")
+    return weather_outlook(row["lon"],row["lat"])
 
 @app.post("/api/fields", status_code=201)
 def create_field(body: FieldInput, user=Depends(write_user)):
@@ -401,7 +461,7 @@ def create_report(run_id: UUID, body: ReportInput, user=Depends(write_user)):
         if not result or body.rotation_id not in [record["id"] for record in result["output"]["alternatives"]]:
             raise HTTPException(422, "Selecciona una alternativa disponible en un análisis terminado.")
         row = one(conn, """
-          INSERT INTO reports(owner,run_id,rotation_id,producer,template_version) VALUES(:o,:a,:rot,:p,2)
+          INSERT INTO reports(owner,run_id,rotation_id,producer,template_version) VALUES(:o,:a,:rot,:p,3)
           ON CONFLICT(run_id,rotation_id,template_version) DO UPDATE SET rotation_id=excluded.rotation_id RETURNING id
         """, o=user["id"], a=run_id, rot=body.rotation_id, p=user["name"])
         return dict(enqueue(conn, user["id"], "report", row["id"], f"report:{row['id']}"))
@@ -436,7 +496,7 @@ def download(report_id: UUID, format: str, user=Depends(read_user)):
         path = restore(conn, user["id"], item["artifact_key"] + "/" + source)
     if not path.is_file():
         raise HTTPException(404, "El archivo no está disponible en el almacenamiento.")
-    return FileResponse(path, media_type=media, filename=f"jupiter-{str(report_id)[:8]}-{source}")
+    return FileResponse(path, media_type=media, filename=f"SkyField-{str(report_id)[:8]}-{source}")
 
 if os.getenv("SERVE_WEB") == "1":
     dist = ROOT / "web/dist"
@@ -453,6 +513,6 @@ if os.getenv("SERVE_WEB") == "1":
     def spa(path: str):
         if path.startswith("api/"):
             raise HTTPException(404, "Ruta desconocida.")
-        if path in {"agro-aerial.webp", "favicon.svg"} and (dist / path).is_file():
-            return FileResponse(dist / path)
+        if path in {"agro-aerial.webp", "skyfield-aerial.webp", "favicon.svg"} and (dist / path).is_file():
+            return FileResponse(dist / path,media_type="image/svg+xml" if path.endswith(".svg") else "image/webp")
         return FileResponse(dist / "index.html", headers={"Cache-Control":"no-cache"})

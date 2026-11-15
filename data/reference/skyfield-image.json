@@ -1,0 +1,7 @@
+{
+  "asset": "../../web/public/skyfield-aerial.webp",
+  "generator": "ImageGen, herramienta integrada",
+  "created": "2026-11-15",
+  "type": "Imagen ilustrativa generada, sin ubicación geográfica verificada",
+  "prompt": "Use case: photorealistic-natural. Asset type: wide website background for SkyField, an agricultural decision support web application in Santa Cruz, Bolivia. Primary request: an aerial view looking down through a break in soft white clouds at beautiful agricultural fields and a harvest landscape. Subject: a patchwork of large green and golden cultivated fields, precise natural crop rows and small field roads in the tropical lowlands. Composition: cinematic wide landscape, oblique aerial perspective, fields clearly visible across the center and bottom, wisps of bright clouds framing the edges, calm open areas for an interface text overlay. Style: realistic professional aerial landscape photography, natural morning light, rich muted greens and warm gold, subtle atmospheric depth. No text, logos, labels, watermark or interface elements. Output a high resolution landscape image."
+}

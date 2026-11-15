@@ -1,4 +1,4 @@
-# Publicar Júpiter Jr en internet
+# Publicar SkyField en internet
 
 La aplicación incluye un contenedor de publicación que sirve React y FastAPI desde el mismo origen HTTPS. El contenedor ejecuta las migraciones y el catálogo al arrancar, inicia la API y el procesador de trabajos, y los supervisa. Los productores pueden crear su cuenta desde computadoras y celulares. El GPS requiere permiso del dispositivo y HTTPS.
 

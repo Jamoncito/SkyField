@@ -7,7 +7,7 @@ import numpy as np
 from .climate import COLS
 from .jobs import JobError
 
-VERSION = "water-balance-1.2.0"
+VERSION = "skyfield-water-2.0.0"
 CATALOG_VERSION = "fao56-regional-3"
 FAO = "https://www.fao.org/4/x0490e/x0490e00.htm"
 # FAO 56 tables 11, 12, 22 and 23 provide reference coefficients and ranges.
@@ -55,6 +55,13 @@ def planting_months(inputs):
 
 def planting_dates(year, inputs):
     return [date(year+i,month,1) for i,month in enumerate(planting_months(inputs))]
+
+
+def scenario_temperature(inputs, scenario, month):
+    factors = inputs.get("enso_factors", {}).get(scenario)
+    if factors:
+        return factors[month-1]["warming_c"]
+    return inputs["warming_c"] if scenario == "sensitivity" else 0
 
 def et0(rows, latitude, elevation, warming=0):
     valid = np.array([all(row[c] is not None for c in COLS[:6]) for row in rows])
@@ -169,10 +176,10 @@ def project(rows, planting_year, seq, inputs, profile, scenario, trace=False):
     last_depth, root_water, outside_water = full_depth,.5*(fc-wp)*full_depth*1000,0.
     season = 0
     frost_days = hot_days = bare_days = 0
-    warming = inputs["warming_c"] if scenario == "sensitivity" else 0
     daily = []
     for row, demand0, rain0 in rows:
         day = row["date"]
+        warming = scenario_temperature(inputs,scenario,day.month)
         if season < 2 and day >= planting[season+1]:
             season += 1
         crop = CROPS[seq[season]]
@@ -212,12 +219,13 @@ def project(rows, planting_year, seq, inputs, profile, scenario, trace=False):
                 frost_days=frost_days, hot_days=hot_days, fallow_days=bare_days,
                 irrigation_mm=round(irrigation_sum,2)), daily
 
-def windows(rows, inputs, elevation, latitude):
+def windows(rows, inputs, elevation, latitude, scenarios=("historical","sensitivity")):
     mapping = {r["date"]: n for n,r in enumerate(rows)}
     span = range(rows[0]["date"].year, rows[-1]["date"].year-1)
-    for scenario, rain_shift, warming in [
-        ("historical",0,0), ("sensitivity", inputs["rainfall_shift_pct"], inputs["warming_c"])
-    ]:
+    for scenario in scenarios:
+        factors = inputs.get("enso_factors",{}).get(scenario)
+        rain_shift = inputs["rainfall_shift_pct"] if scenario=="sensitivity" else 0
+        warming = np.array([scenario_temperature(inputs,scenario,r["date"].month) for r in rows])
         demands = et0(rows, latitude, elevation, warming)
         for year in span:
             months = planting_months(inputs)
@@ -226,7 +234,8 @@ def windows(rows, inputs, elevation, latitude):
             selected = [mapping.get(first+timedelta(days=i)) for i in range((end-first).days)]
             if any(i is None or not np.isfinite(demands[i]) or rows[i]["precip_mm_day"] is None for i in selected):
                 continue
-            yield scenario, year, [(rows[i],float(demands[i]), rows[i]["precip_mm_day"]*(1+rain_shift/100))
+            yield scenario, year, [(rows[i],float(demands[i]), rows[i]["precip_mm_day"]*
+                                   (factors[rows[i]["date"].month-1]["rain_factor"] if factors else 1+rain_shift/100))
                                    for i in selected]
 
 
@@ -248,10 +257,10 @@ def simulate_window(rows, year, choices, inputs, profile, scenario):
     prev_depth = np.full(len(choices), full_depth)
     deficit, cover, irrigation, stress, frost, heat, fallow = np.zeros((7,len(choices)))
     max_irrigation = (inputs["irrigation_mm"] or 0) if inputs["irrigation"] == "confirmed" else 0
-    warming = inputs["warming_c"] if scenario == "sensitivity" else 0
     season = 0
     for row, reference, rain in rows:
         day = row["date"]
+        warming = scenario_temperature(inputs,scenario,day.month)
         if season < 2 and day >= planting[season+1]:
             season += 1
         crops = paths[:,season]
@@ -289,7 +298,7 @@ def simulate_window(rows, year, choices, inputs, profile, scenario):
             for d,s,c,i,f,h,b in zip(deficit,stress,cover,irrigation,frost,heat,fallow)]
 
 
-def run_model(rows, source, site, inputs, soil_profile=None):
+def run_model(rows, source, site, inputs, soil_profile=None, enso_context=None):
     patterns, excluded, baseline = sequences(inputs)
     profile = {k: inputs[k] for k in ["theta_fc","theta_wp","depth_m"]}
     from .soil import retention_at_depth
@@ -363,8 +372,39 @@ def run_model(rows, source, site, inputs, soil_profile=None):
                             criteria=dict(zip(["water","cover","diversity"],terms)),
                             calendar=[dict(crop=CROPS[c]["name"], month=month,
                                            duration=sum(CROPS[c]["days"])) for c,month in zip(seq,planting_months(inputs))]))
+    from .economics import economic_summary, market_database, rotation_budget
+    market = market_database()
+    settings = inputs.get("economics") or {}
+    for record in records:
+        record["economics"] = rotation_budget(record["crops"],planting_months(inputs),settings,market,site.get("area_ha"))
+    economy = economic_summary(records,settings,market)
     reference = next((r for r in records if r["id"]=="reference"),None)
     ranked = sorted((r for r in records if r["id"]!="reference"),key=lambda r:(-r["score"],r["id"]))[:3]
+    agronomic_ids = [r["id"] for r in ranked]
+    # Include the best economic choices across the entire feasible search space.
+    economic_ids = economy["ranked_ids"] or economy["revenue_ranked_ids"]
+    by_id = {r["id"]:r for r in records}
+    for ident in economic_ids:
+        if ident not in agronomic_ids:
+            ranked.append(by_id[ident])
+    for record in ranked:
+        record["agronomic_top"] = record["id"] in agronomic_ids
+        record["economic_top"] = record["id"] in economy["ranked_ids"]
+
+    enso_inputs = {**inputs,"enso_factors":enso_context["factors"]} if enso_context and enso_context.get("status")=="available" else None
+    enso_windows = list(windows(rows,enso_inputs,elevation,site["lat"],("elnino","lanina"))) if enso_inputs and candidates else []
+    selected_choices = [(r["id"],r["crops"]) for r in ranked]
+    enso_samples = {case:[] for case in ("elnino","lanina")}
+    for case,year,data in enso_windows:
+        enso_samples[case].append(simulate_window(data,year,selected_choices,enso_inputs,profile,case))
+    for order, record in enumerate(ranked):
+        for case in ("elnino","lanina"):
+            outcomes = [window[order] for window in enso_samples[case]]
+            if outcomes:
+                record["metrics"][case] = {key:round(float(np.mean([v[key] for v in outcomes])),2)
+                    for key in ("deficit_mm","stress_days","cover_pct","irrigation_mm","frost_days","hot_days","fallow_days")}
+                record["metrics"][case].update(windows=[v["year"] for v in outcomes],window_results=outcomes,
+                    deficit_range=[min(v["deficit_mm"] for v in outcomes),max(v["deficit_mm"] for v in outcomes)])
     for case in ("historical", "sensitivity"):
         for record in ranked:
             metrics = record["metrics"][case]
@@ -382,6 +422,7 @@ def run_model(rows, source, site, inputs, soil_profile=None):
                   status="Exploratorio",profile=profile,elevation_m=elevation,
                   regional_soil=soil_profile, regional_retention=soil_used, assumed=assumed,
                   climate_indicators=climate_indicators(rows,latitude=site["lat"],elevation=elevation),
+                  economics=economy,enso=enso_context,
                   catalog_parameters=CROPS,
                   limitations=["Coeficientes y raíces de referencia FAO 56. Calendario, cobertura y cultivares requieren validación local.",
                     "Tres campañas anuales en años sucesivos. Confirma aptitud térmica, altitud y manejo por zona. La simulación prioriza el agua y la cobertura.",
@@ -395,10 +436,13 @@ def run_model(rows, source, site, inputs, soil_profile=None):
     first_windows = {}
     for case,year,data in candidates:
         first_windows.setdefault(case,(year,data))
+    for case,year,data in enso_windows:
+        first_windows.setdefault(case,(year,data))
     daily = {}
     for record in ranked + ([reference] if reference else []):
         daily[record["id"]] = {case:project(first_windows[case][1],first_windows[case][0],record["crops"],
-            inputs,profile,case,trace=True)[1] if case in first_windows else [] for case in ("historical","sensitivity")}
+            enso_inputs if case in ("elnino","lanina") else inputs,profile,case,trace=True)[1]
+            if case in first_windows else [] for case in ("historical","sensitivity","elnino","lanina")}
         if record is not reference:
             record["recommendation"] = recommendation(record, reference, assumed, soil_used, inputs["priority"])
     return values, daily

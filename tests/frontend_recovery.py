@@ -26,7 +26,7 @@ def main():
         page.screenshot(path=args.output/'servicio-temporalmente-ocupado.png')
         page.unroute('**/api/me')
         page.get_by_role('button',name='Reintentar',exact=True).click()
-        expect(page.get_by_role('heading',name='Bienvenido a Júpiter Jr')).to_be_visible()
+        expect(page.get_by_role('heading',name='Bienvenido a SkyField')).to_be_visible()
         browser.close()
     print('Recuperación de carga correcta · recursos, mensaje de servicio y reintento')
 

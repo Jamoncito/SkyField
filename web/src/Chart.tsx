@@ -15,9 +15,14 @@ export function Plot({data, layout, label}:{data:object[]; layout:object; label:
       if (!active) return;
       await Plotly.react(el,data,{paper_bgcolor:'transparent',plot_bgcolor:'transparent',autosize:true,
         margin:{l:47,r:43,t:10,b:34},font:{family:'DM Sans Variable, sans-serif',color:'#527065',size:11},
-        ...layout},{displayModeBar:false,responsive:true,displaylogo:false});
-      if (!active) return;
-      const watcher = new ResizeObserver(()=>Plotly.Plots.resize(el));
+        ...layout},{displayModeBar:false,responsive:false,displaylogo:false});
+      if (!active) {Plotly.purge(el);return;}
+      const watcher = new ResizeObserver(()=>{
+        if(!active||!el.isConnected||!el.clientWidth||!el.clientHeight)return;
+        void Plotly.Plots.resize(el).catch(()=>{
+          if(active&&el.isConnected&&el.clientWidth&&el.clientHeight)setFailed(true);
+        });
+      });
       watcher.observe(el);
       cleanup=()=>{watcher.disconnect();Plotly.purge(el);};
     }).catch(()=>{if(active)setFailed(true);});

@@ -3,6 +3,7 @@ import { Component, type ReactNode } from 'react';
 import '@fontsource-variable/dm-sans';
 import '@fontsource-variable/manrope';
 import './style.css';
+import './skyfield.css';
 import { App } from './App';
 
 class Recovery extends Component<{children:ReactNode},{failed:boolean}> {

@@ -1,0 +1,36 @@
+{
+  "version": "skyfield-markets-2026-11-15",
+  "verified": "2026-11-15",
+  "fx": {"bob_per_usd": 11.67, "date": "2026-11-14", "valid_until": "2026-11-16", "provider": "Banco Central de Bolivia", "url": "https://www.bcb.gob.bo/bcb_tco_publico_ultima_cotizacion.php"},
+  "national": [
+    {"crop": "soy", "product": "Soya en grano", "value": 265, "currency": "BOB", "unit": "quintal", "kg_per_unit": 46, "date": "2026-11-12", "market": "Santa Cruz mayorista", "source": "oap", "page": 1},
+    {"crop": "maize", "product": "Maíz amarillo duro", "value": 129, "currency": "BOB", "unit": "quintal", "kg_per_unit": 46, "date": "2026-11-12", "market": "Santa Cruz mayorista", "source": "oap", "page": 1},
+    {"crop": "sorghum", "product": "Sorgo", "value": 95, "currency": "BOB", "unit": "quintal", "kg_per_unit": 46, "date": "2026-11-12", "market": "Santa Cruz mayorista", "source": "oap", "page": 1},
+    {"crop": "bean", "product": "Frejol negro mediano", "value": 310, "currency": "BOB", "unit": "quintal", "kg_per_unit": 46, "date": "2026-11-12", "market": "Santa Cruz mayorista", "source": "oap", "page": 1},
+    {"crop": "peanut", "product": "Maní con cáscara rojo", "value": 435, "currency": "BOB", "unit": "quintal", "kg_per_unit": 46, "date": "2026-11-12", "market": "Santa Cruz mayorista", "source": "oap", "page": 1},
+    {"crop": "cassava", "product": "Yuca mediana a grande", "value": 67.05, "currency": "BOB", "unit": "arroba", "kg_per_unit": 11.5, "date": "2026-11-12", "market": "Santa Cruz mayorista", "source": "oap", "page": 1},
+    {"crop": "potato", "product": "Papa Desiree mediana", "value": 85.33, "currency": "BOB", "unit": "arroba", "kg_per_unit": 11.5, "date": "2026-11-12", "market": "Santa Cruz mayorista", "source": "oap", "page": 1},
+    {"crop": "tomato", "product": "Tomate perita híbrido mediano", "value": 116.34, "currency": "BOB", "unit": "caja de 21 kg", "kg_per_unit": 21, "date": "2026-11-12", "market": "Santa Cruz mayorista", "source": "oap", "page": 1},
+    {"crop": "sunflower", "product": "Girasol", "value": 409, "currency": "USD", "unit": "tonelada", "kg_per_unit": 1000, "date": "2024", "market": "Promedio anual Santa Cruz", "source": "cao", "page": 12},
+    {"crop": "wheat", "product": "Trigo", "value": 500, "currency": "USD", "unit": "tonelada", "kg_per_unit": 1000, "date": "2024-08/2024-12", "market": "Referencia de cotización Santa Cruz", "source": "cao", "page": 13}
+  ],
+  "international": [
+    {"crop": "soy", "product": "Soya, futuro CBOT Nov-26", "usd_t": 448.18, "date": "2026-10-29", "market": "Chicago, futuro", "source": "anapo", "comparable": true},
+    {"crop": "soy", "product": "Soya internacional", "usd_t": 515, "date": "2026-10", "market": "Banco Mundial, promedio mensual", "source": "worldbank", "comparable": true},
+    {"crop": "maize", "product": "Maíz internacional", "usd_t": 226.5, "date": "2026-10", "market": "Banco Mundial, promedio mensual", "source": "worldbank", "comparable": true},
+    {"crop": "wheat", "product": "Trigo estadounidense HRW", "usd_t": 317, "date": "2026-10", "market": "Banco Mundial, promedio mensual", "source": "worldbank", "comparable": true},
+    {"crop": "coffee", "product": "Café arábica, grano verde", "usd_t": 7400, "date": "2026-10", "market": "Banco Mundial, promedio mensual", "source": "worldbank", "comparable": false},
+    {"crop": "cacao", "product": "Cacao, grano", "usd_t": 5750, "date": "2026-10", "market": "Banco Mundial, promedio mensual", "source": "worldbank", "comparable": false},
+    {"crop": "cotton", "product": "Algodón fibra", "usd_t": 2000, "date": "2026-10", "market": "Banco Mundial, promedio mensual", "source": "worldbank", "comparable": false},
+    {"crop": "peanut", "product": "Maní internacional", "usd_t": 1600, "date": "2026-10", "market": "Banco Mundial, especificación internacional", "source": "worldbank", "comparable": false}
+  ],
+  "sources": {
+    "oap": {"name": "OAP, precios mayoristas diarios", "url": "https://oap.produccion.gob.bo/wp-content/uploads/2026/11/BOLETIN_DIARIO_2026-11-12.pdf", "date": "2026-11-12"},
+    "cao": {"name": "CAO, Evaluación del sector agropecuario de Santa Cruz, gestión 2024", "url": "https://www.agrodatos.com.bo/_files/ugd/6c3b2e_05949f3080c24bb28afec71fdfed12f1.pdf", "date": "2024-12-18"},
+    "anapo": {"name": "ANAPO, cotización Chicago, fuente CME Group", "url": "https://anapobolivia.org/", "date": "2026-10-29"},
+    "worldbank": {"name": "Banco Mundial, Pink Sheet de noviembre de 2026", "url": "https://thedocs.worldbank.org/en/doc/74e8be41ceb20fa0da750cda2f6b9e4e-0050012026/related/CMO-Pink-Sheet-November-2026.pdf", "date": "2026-11-03"}
+  },
+  "unit_note": "Conversión comercial declarada de 46 kg por quintal y 11,5 kg por arroba. Verifica el peso de tu contrato. Los productos, mercados, fechas y calidad pueden diferir.",
+  "market_note": "Referencias nacionales e internacionales fechadas. El precio mayorista incluye una etapa comercial posterior a finca. La diferencia refleja calidad, logística, fecha y condiciones contractuales. El productor puede introducir su precio pactado y sus costos completos.",
+  "paraguay_note": "Se usa CBOT publicado por ANAPO y el Banco Mundial como referencia internacional verificable. Una cotización paraguaya requiere producto, puerto, fecha, flete y base contractual comparables. Puedes registrar una oferta de comprador como precio pactado."
+}

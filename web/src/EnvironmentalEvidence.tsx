@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { n } from './client';
 import { Plot } from './Chart';
-import type { Environment, Option } from './types';
+import type { Environment, Option, Scenario } from './types';
+import { scenarioNames } from './ClimateImpact';
 
-export function EnvironmentalEvidence({environment,option,scenario}:{environment:Environment;option?:Option;scenario:'historical'|'sensitivity'}){
+export function EnvironmentalEvidence({environment,option,scenario}:{environment:Environment;option?:Option;scenario:Scenario}){
   const [index,setIndex]=useState(environment.monthly.length-1);
   const current=environment.monthly[index];
   const timeline=option?.timeline?.[scenario]??[];
@@ -17,6 +18,7 @@ export function EnvironmentalEvidence({environment,option,scenario}:{environment
       {type:'bar',name:'Lluvia − ET₀ (mm)',x:environment.monthly.map(m=>m.month),y:environment.monthly.map(m=>m.balance_mm),marker:{color:environment.monthly.map(m=>(m.balance_mm??0)<0?'#b97443':'#5a8c68')}},
       {type:'scatter',name:'Anomalía humedad (pp)',yaxis:'y2',x:environment.monthly.map(m=>m.month),y:environment.monthly.map(m=>m.anomaly),line:{color:'#456eaa',width:1.5}}
     ]} layout={{yaxis:{title:'mm'},yaxis2:{title:'pp',overlaying:'y',side:'right'},legend:{orientation:'h'},shapes:current?[{type:'line',x0:current.month,x1:current.month,y0:0,y1:1,yref:'paper',line:{color:'#123e30',dash:'dot'}}]:[]}}/>
+    <p className="chart-reading">Barras bajo cero indican lluvia menor que la demanda ET₀ en ese mes. La línea muestra si la humedad radicular estuvo por encima o por debajo de su mediana estacional. Su coincidencia ayuda a reconocer períodos que requieren revisar el agua disponible.</p>
     <details className="form-details"><summary>Datos armonizados por mes y cobertura disponible</summary>
       <p>{environment.method} {environment.support}</p>
       <div className="table-scroll"><table className="data-table"><thead><tr>{['Mes','Lluvia (mm)','ET₀ (mm)','Temp. (°C)','Humedad radicular relativa (%)','Anomalía (pp)'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody>{environment.monthly.map(m=><tr key={m.month}><td>{m.month}</td>{[m.rain_mm,m.et0_mm,m.temp_c,m.wetness,m.anomaly].map((v,i)=><td key={i}>{n(v,1)}</td>)}</tr>)}</tbody></table></div>
@@ -28,11 +30,12 @@ export function EnvironmentalEvidence({environment,option,scenario}:{environment
       <p className="notice">{environment.uncertainty}</p>
     </details>
     {timeline.length>0&&<details className="form-details" open><summary>Meses críticos de la alternativa elegida</summary>
-      <p>Primera ventana completa del escenario {scenario==='historical'?'histórico':'de sensibilidad'}. El déficit y el período fuera de cultivo se obtienen del balance diario.</p>
+      <p>Primera ventana completa del escenario {scenarioNames[scenario]}. El déficit y el período fuera de cultivo se obtienen del balance diario.</p>
       <Plot label="Déficit y días fuera de cultivo por mes" data={[
         {type:'bar',name:'Déficit (mm)',x:timeline.map(m=>m.month),y:timeline.map(m=>m.deficit_mm),marker:{color:'#b97443'}},
         {type:'scatter',name:'Días fuera de cultivo',yaxis:'y2',x:timeline.map(m=>m.month),y:timeline.map(m=>m.fallow_days),line:{color:'#66835b',dash:'dot'}}
       ]} layout={{yaxis:{title:'mm'},yaxis2:{title:'días',overlaying:'y',side:'right',range:[0,32]},legend:{orientation:'h'}}}/>
+      <p className="chart-reading">El mes con mayor barra acumula más demanda de agua sin cubrir. Revisa si coincide con una etapa sensible y confirma esa etapa en campo. La línea alta indica más días fuera del cultivo simulado y una oportunidad para planear rastrojo o cobertura.</p>
       <div className="table-scroll"><table className="data-table"><thead><tr><th>Mes</th><th>Déficit (mm)</th><th>Días con déficit</th><th>Días fuera de cultivo</th></tr></thead><tbody>{[...timeline].filter(m=>m.deficit_mm>0||m.fallow_days>0).sort((a,b)=>b.deficit_mm-a.deficit_mm).slice(0,6).map(m=><tr key={m.month}><td>{m.month}</td><td>{n(m.deficit_mm,1)}</td><td>{m.stress_days}</td><td>{m.fallow_days}</td></tr>)}</tbody></table></div>
       <p className="muted">El período fuera del cultivo simulado indica una oportunidad para revisar coberturas y rastrojo. La cobertura real y el estrés observado se verifican con imágenes de calidad y visitas al terreno.</p>
     </details>}

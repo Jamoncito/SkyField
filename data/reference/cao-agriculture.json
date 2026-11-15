@@ -1,0 +1,24 @@
+{
+  "provider": "Cámara Agropecuaria del Oriente, CAO",
+  "url": "https://cao.org.bo/estadisticas/",
+  "document": "https://www.agrodatos.com.bo/_files/ugd/6c3b2e_05949f3080c24bb28afec71fdfed12f1.pdf",
+  "title": "Evaluación del sector agropecuario de Santa Cruz, gestión 2024",
+  "published": "2024-12-18",
+  "years": [2022, 2023, 2024],
+  "campaigns": [
+    {"crop":"soy","name":"Soya","season":"summer","area_ha":[1100800,1171700,1156600],"yield_t_ha":[2.15,2.11,1.34],"production_t":[2370529,2362651,1548752],"page":9},
+    {"crop":"maize","name":"Maíz","season":"summer","area_ha":[99150,106600,85800],"yield_t_ha":[3.41,3.91,3.10],"production_t":[338205,416806,265980],"page":9},
+    {"crop":"rice","name":"Arroz con cáscara","season":"summer","area_ha":[135000,135000,120000],"yield_t_ha":[3.20,3.50,1.88],"production_t":[432000,472500,225000],"page":9},
+    {"crop":"sorghum","name":"Sorgo","season":"summer","area_ha":[39400,49075,58400],"yield_t_ha":[2.14,2.81,1.94],"production_t":[84170,137901,113296],"page":9},
+    {"crop":"sesame","name":"Sésamo","season":"summer","area_ha":[22000,22000,20000],"yield_t_ha":[0.48,0.48,0.45],"production_t":[10560,10560,9000],"page":9},
+    {"crop":"cotton","name":"Algodón fibra","season":"summer","area_ha":[3000,3000,1800],"yield_t_ha":[0.68,0.64,0.30],"production_t":[2030,1920,540],"page":9},
+    {"crop":"sugarcane","name":"Caña de azúcar","season":"summer","area_ha":[169637,167553,170000],"yield_t_ha":[53.60,56.34,56.25],"production_t":[9092559,9440239,9562500],"page":9},
+    {"crop":"soy","name":"Soya","season":"winter","area_ha":[407600,399700,398050],"yield_t_ha":[1.59,2.13,1.14],"production_t":[633559,852490,454741],"page":10},
+    {"crop":"sunflower","name":"Girasol","season":"winter","area_ha":[166100,161080,125700],"yield_t_ha":[1.07,1.15,0.82],"production_t":[173122,185122,102526],"page":10},
+    {"crop":"wheat","name":"Trigo","season":"winter","area_ha":[118470,94630,77500],"yield_t_ha":[1.09,1.44,0.49],"production_t":[103617,136015,37959],"page":10},
+    {"crop":"sorghum","name":"Sorgo","season":"winter","area_ha":[408000,546450,321200],"yield_t_ha":[1.15,2.93,1.12],"production_t":[628770,1599943,361170],"page":10},
+    {"crop":"maize","name":"Maíz","season":"winter","area_ha":[61800,41430,32520],"yield_t_ha":[2.79,3.62,2.23],"production_t":[115670,149837,72585],"page":10},
+    {"crop":"chia","name":"Chía","season":"winter","area_ha":[20650,13600,8600],"yield_t_ha":[0.36,0.44,0.13],"production_t":[4868,5918,1082],"page":10}
+  ],
+  "note": "Transcripción de cuadros CAO, páginas PDF 9 y 10. Se conservan las cifras publicadas, incluidos redondeos y diferencias entre área por rendimiento y producción. Los rendimientos de 2024 corresponden a una campaña afectada por sequía y restricciones operativas. Cada presupuesto identifica el año de referencia."
+}

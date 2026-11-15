@@ -1,14 +1,16 @@
 import { lazy, Suspense, useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, CloudSun, FileUp, FlaskConical, Info, MapPin, Save, Sprout } from 'lucide-react';
 import { api,day,errorText,n,post } from './client';
-import type { Crop, ImportRecord, Job, Shape, Site, Task } from './types';
+import type { Crop, EconomicSettings, ImportRecord, Job, Shape, Site, Task } from './types';
 import type { Go } from './App';
 import { SoilDetails, SoilPanel, useSoil } from './SoilProfile';
+import { BudgetEditor } from './Economics';
+import { WeatherPanel } from './Weather';
 
 const Map=lazy(()=>import('./Map'));
 const kindLabels={climate:'Clima',soil:'Suelo',campaigns:'Campañas'};
 
-export function FieldEditor({id,analyzing,go,refresh}:{id:string|null;analyzing:boolean;go:Go;refresh:()=>Promise<void>}) {
+export function FieldEditor({id,analyzing,go,refresh,onSaved}:{id:string|null;analyzing:boolean;go:Go;refresh:()=>Promise<void>;onSaved?:(s:Site)=>void}) {
   const [site,setSite]=useState<Site|null>(),[name,setName]=useState(''),[shape,setShape]=useState<Shape|null>(null);
   const [source,setSource]=useState('dibujo manual'),[error,setError]=useState(''),[saved,setSaved]=useState('');
   const [busy,setBusy]=useState(false),[dirty,setDirty]=useState(false);
@@ -31,6 +33,7 @@ export function FieldEditor({id,analyzing,go,refresh}:{id:string|null;analyzing:
       const data={name,geometry:shape,source,version:site?.version};
       const item=id?await api<Site>('/fields/'+id,{method:'PATCH',body:JSON.stringify(data)}):await post<Site>('/fields',data);
       setSite(item);setName(item.name);setDirty(false);setSaved('Lote guardado.');void refresh();
+      onSaved?.(item);
       if(!id)go('/lotes/'+item.id);
     }catch(e){setError(errorText(e));}finally{setBusy(false);}
   }
@@ -44,11 +47,11 @@ export function FieldEditor({id,analyzing,go,refresh}:{id:string|null;analyzing:
       {site&&<button className="button primary" disabled={dirty||site.multicell} onClick={()=>go('/lotes/'+site.id+'/analizar')}><Sprout size={18}/> Analizar <ArrowRight size={16}/></button>}</div>
     <form onSubmit={save}>
       <div className="editor-grid">
-        <section className="card panel map-panel"><div className="section-head"><div><h2>Ubicación del lote</h2><p>Marca un punto o dibuja un perímetro para calcular el área.</p></div></div>
+        <section className="card panel map-panel" data-tour="location" data-geometry-ready={!!shape}><div className="section-head"><div><h2>Ubicación del lote</h2><p>Marca un punto o dibuja un perímetro para calcular el área.</p></div>{!site&&<button type="button" className="button secondary small" onClick={()=>{setShape({type:'Point',coordinates:[-63.272578418254845,-17.182537861479094]});setSource('punto piloto de referencia');setDirty(true);}}>Usar punto piloto de Santa Cruz</button>}</div>
           <Suspense fallback={<div className="map-stage loading">Cargando editor de mapa…</div>}><Map initial={shape} onShape={(geo,s)=>{setShape(geo);setSource(s);setDirty(true);setSaved('');}}/></Suspense>
         </section>
-        <section className="card panel field-info" data-tour="field-info"><MapPin className="green" size={23}/><h2>Ficha del terreno</h2>
-          <label>Nombre del lote<input value={name} onChange={e=>{setName(e.target.value);setDirty(true);}} minLength={2} maxLength={100} required placeholder="Ej. Lote norte"/></label>
+        <section className="card panel field-info" data-tour="field-info" data-saved={!!site&&!dirty}><MapPin className="green" size={23}/><h2>Ficha del terreno</h2>
+          <label data-tour="field-name">Nombre del lote<input name="field_name" value={name} onChange={e=>{setName(e.target.value);setDirty(true);}} minLength={2} maxLength={100} required placeholder="Ej. Lote norte"/></label>
           <dl className="facts"><div><dt>Geometría</dt><dd>{shape?.type==='Point'?'Punto':shape?'Perímetro':'Por definir'}</dd></div>
           <div><dt>Superficie</dt><dd>{site?.area_ha&&!dirty?n(site.area_ha,2)+' ha':shape&&shape.type!=='Point'?'Al guardar':'—'}</dd></div>
           <div><dt>Coordenadas</dt><dd>{shape?.type==='Point'?shape.coordinates.slice().reverse().map(x=>x.toFixed(6)+'°').join(', '):site&&!dirty?site.lat.toFixed(6)+'°, '+site.lon.toFixed(6)+'°':'—'}</dd></div>
@@ -57,11 +60,11 @@ export function FieldEditor({id,analyzing,go,refresh}:{id:string|null;analyzing:
             site?.pilot&&<p className="notice"><CloudSun size={17}/> El CSV verificado cubre el punto piloto. Si cambias su ubicación se consultará su propia serie.</p>}
           {dirty&&site&&<p className="muted">Guarda los cambios para habilitar el análisis.</p>}
           {error&&<p className="error" role="alert">{error}</p>}{saved&&<p className="success" role="status">{saved}</p>}
-          <button className="button primary" disabled={busy||(!dirty&&!!site)}><Save size={16}/> {busy?'Guardando…':'Guardar'}</button>
+          <button className="button primary" data-tour="save-field" disabled={busy||(!dirty&&!!site)}><Save size={16}/> {busy?'Guardando…':'Guardar'}</button>
         </section>
       </div>
     </form>
-    {site&&<><SoilPanel key={site.version} site={site} disabled={dirty}/><Imports site={site} records={records} refresh={loadImports}/></>}
+    {site&&<><SoilPanel key={site.version} site={site} disabled={dirty}/><WeatherPanel fieldId={site.id}/><Imports site={site} records={records} refresh={loadImports}/></>}
   </>;
 }
 
@@ -116,8 +119,9 @@ function Imports({site,records,refresh}:{site:Site;records:ImportRecord[];refres
 }
 
 function AnalysisForm({site,go}:{site:Site;go:Go}) {
-  const [irrigation,setIrrigation]=useState('unknown'),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [irrigation,setIrrigation]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
   const [trial,setTrial]=useState(false);
+  const [economics,setEconomics]=useState<EconomicSettings>({yield_year:2024,farmgate_discount_pct:0,budgets:{}});
   const [differentMonths,setDifferentMonths]=useState(false),[months,setMonths]=useState([11,11,11]);
   const [crops,setCrops]=useState<Crop[]>([]),[allowed,setAllowed]=useState<string[]>([]),[regional,setRegional]=useState(false);
   const soil=useSoil(site);
@@ -128,12 +132,12 @@ function AnalysisForm({site,go}:{site:Site;go:Go}) {
     e.preventDefault();setBusy(true);setError('');
     const form=new FormData(e.currentTarget);
     const body:Record<string,unknown>={previous:form.get('previous'),priority:form.get('priority'),irrigation,trial,
-      allowed_crops:allowed,use_regional_soil:regional};
+      allowed_crops:allowed,use_regional_soil:regional,economics};
     if(differentMonths)body.plant_months=months;
     for(const k of ['irrigation_mm','theta_fc','theta_wp','depth_m','soil_ph','soil_ec','plant_month','elevation_m','rainfall_shift_pct','warming_c']){
       const value=form.get(k);if(value!=null&&value!=='')body[k]=Number(value);
     }
-    try{const task=await post<Task>('/fields/'+site.id+'/analyses',body);go('/comparar/'+task.target_id);}
+    try{const task=await post<Task>('/fields/'+site.id+'/analyses',body);go('/comparar/'+task.target_id);window.dispatchEvent(new CustomEvent('skyfield-analysis-started',{detail:task.target_id}));}
     catch(e){setError(errorText(e));}finally{setBusy(false);}
   }
   return <>
@@ -141,15 +145,15 @@ function AnalysisForm({site,go}:{site:Site;go:Go}) {
     <div className="page-heading"><div><h1>Preparar análisis</h1><p>{site.name} · versión {site.version} del lote</p></div></div>
     <form className="analysis-layout" onSubmit={submit}>
       <section className="card panel"><div className="section-head"><div><h2>Manejo y objetivos</h2><p>Usa los datos que puedes confirmar del terreno.</p></div></div>
-        <div className="two-col form-gap" data-tour="management"><label>Cultivo anterior<select name="previous" defaultValue="unknown"><option value="unknown">No lo sé</option>{crops.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
-        <label>Disponibilidad de riego<select value={irrigation} onChange={e=>setIrrigation(e.target.value)}><option value="unknown">No lo sé</option><option value="rainfed">Solo lluvia</option><option value="confirmed">Riego confirmado</option></select></label>
+        <div className="two-col form-gap" data-tour="management"><label>Cultivo anterior<select name="previous" defaultValue="" required><option value="" disabled>Selecciona un antecedente</option><option value="unknown">No lo sé</option>{crops.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
+        <label>Disponibilidad de riego<select name="irrigation" value={irrigation} required onChange={e=>setIrrigation(e.target.value)}><option value="" disabled>Selecciona disponibilidad</option><option value="unknown">No lo sé</option><option value="rainfed">Solo lluvia</option><option value="confirmed">Riego confirmado</option></select></label>
         {irrigation==='confirmed'&&<label>Riego máximo (mm/día)<input type="number" name="irrigation_mm" min=".1" max="100" step=".1" required/></label>}
         <label data-tour="priority">Prioridad<select name="priority" defaultValue="balanced"><option value="balanced">Equilibrada</option><option value="water">Menor déficit de agua</option><option value="cover">Mayor cobertura y protección del suelo</option><option value="diversity">Diversidad de familias</option></select></label>
         <label>Mes de siembra<select name="plant_month" value={months[0]} onChange={e=>setMonths([Number(e.target.value),Number(e.target.value),Number(e.target.value)])}>{monthNames.map((m,i)=><option value={i+1} key={m}>{m}</option>)}</select></label></div>
         <div className="form-details" data-tour="calendar"><label className="check-label"><input type="checkbox" checked={differentMonths} onChange={e=>setDifferentMonths(e.target.checked)}/><span>Elegir un mes por campaña anual</span></label>
           {differentMonths&&<div className="campaign-months">{months.map((month,i)=><label key={i}>Campaña {i+1}<select aria-label={'Mes de campaña '+(i+1)} value={month} onChange={e=>setMonths(months.map((v,j)=>j===i?Number(e.target.value):v))}>{monthNames.map((m,j)=><option value={j+1} key={m}>{m}</option>)}</select></label>)}</div>}
           <p className="muted">Tres campañas en años sucesivos. Cada ventana local y duración necesita confirmación. El análisis descarta secuencias que se solapen.</p></div>
-        <details className="form-details"><summary data-tour="crops">Cultivos disponibles ({allowed.length} de {crops.filter(c=>c.simulated).length})</summary>
+        <details className="form-details" data-tour="crops"><summary>Cultivos disponibles ({allowed.length} de {crops.filter(c=>c.simulated).length})</summary>
           <p className="muted">Desmarca los cultivos que no tienes previsto manejar por semilla, equipo, comprador o uso. Elige al menos tres. Las ventanas son orientativas para Santa Cruz.</p>
           <div className="crop-selection">{crops.filter(c=>c.simulated).map(c=><label className="check-label" key={c.code}><input type="checkbox" checked={allowed.includes(c.code)}
             onChange={e=>setAllowed(e.target.checked?[...allowed,c.code]:allowed.filter(x=>x!==c.code))}/><span>{c.name}</span></label>)}</div></details>
@@ -168,7 +172,8 @@ function AnalysisForm({site,go}:{site:Site;go:Go}) {
         </div></details>
         <details className="form-details"><summary data-tour="sensitivity">Sensibilidad hipotética</summary><div className="two-col form-gap">
           <label>Cambio de lluvia (%)<input type="number" name="rainfall_shift_pct" defaultValue="-15" min="-60" max="60" step=".1"/></label>
-          <label>Cambio de temperatura (°C)<input type="number" name="warming_c" defaultValue="1" min="-4" max="6" step=".1"/></label></div></details>
+          <label>Cambio de temperatura (°C)<input type="number" name="warming_c" defaultValue="1" min="-4" max="6" step=".1"/></label></div><p>El resultado incluirá también escenarios ENSO muy fuertes, con índice RONI +2 y −2 °C, calibrados con clima mensual NASA y NOAA. Estos controles definen un cambio personalizado adicional.</p></details>
+        <BudgetEditor crops={crops} allowed={allowed} value={economics} onChange={setEconomics}/>
         {crops.length>0&&<details className="form-details regional-catalog"><summary>Cultivos y producción de Santa Cruz</summary>
           <p>Referencias del Instituto Cruceño de Estadística, con datos del INE. Producción 2022–2023 preliminar, expresada en miles de toneladas. El volumen departamental ayuda a reconocer cadenas productivas.</p>
           <div className="table-scroll"><table className="data-table"><thead><tr><th>Cultivo</th><th>Producción (miles t)</th><th>Uso en la herramienta</th></tr></thead><tbody>{crops.map(c=><tr key={c.code}><td><b>{c.name}</b><small>{c.note}</small></td><td>{n(c.production_kt)}</td><td>{c.simulated?'Comparación de rotaciones':'Antecedente regional y cultivo anterior'}</td></tr>)}</tbody></table></div>
@@ -176,7 +181,7 @@ function AnalysisForm({site,go}:{site:Site;go:Go}) {
           <p className="muted">Arroz, caña de azúcar y mandarina conservan su manejo específico en la ficha regional. Para comparar su balance se requiere adaptar anegamiento, socas o huerto perenne.</p></details>}
       </section>
       <aside className="card panel analysis-aside"><span className="metric-icon"><FlaskConical size={22}/></span><h2>Evaluación exploratoria</h2><p>El catálogo inicial es ilustrativo. Los indicadores dependen del clima histórico y de los datos declarados.</p>
-        <label className="check-label"><input type="checkbox" checked={trial} onChange={e=>setTrial(e.target.checked)}/><span><b>Activar supuestos de ensayo</b><small>Completa entradas hídricas faltantes con un perfil de prueba identificado.</small></span></label>
+        <label className="check-label" data-tour="trial"><input name="trial" type="checkbox" checked={trial} onChange={e=>setTrial(e.target.checked)}/><span><b>Activar supuestos de ensayo</b><small>Completa entradas hídricas faltantes con un perfil de prueba identificado.</small></span></label>
         {error&&<p className="error" role="alert">{error}</p>}
         {crops.length>0&&allowed.length<3&&<p className="notice">Selecciona al menos tres cultivos disponibles.</p>}
         <button className="button primary" data-tour="run" disabled={busy||site.multicell||allowed.length<3}>{busy?'Enviando…':'Analizar rotaciones'}<ArrowRight size={17}/></button>

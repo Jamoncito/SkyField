@@ -151,12 +151,26 @@ def render(item, lease, progress):
             if output["reference"]:
                 records.append(output["reference"])
             for rec in records:
-                for scenario, metrics in rec["metrics"].items():
+                for scenario in ("historical","sensitivity","elnino","lanina"):
+                    metrics = rec["metrics"].get(scenario)
+                    if metrics is None:
+                        continue
                     for metric, (_,unit) in METRICS.items():
                         if metric not in metrics:
                             continue
                         out.writerow([clean(x) for x in [item["run_id"],scenario,rec["id"],metric,
                             metrics[metric],unit,output["dataset_id"],output["version"]]])
+                if rec.get("economics"):
+                    for metric,unit in [("revenue_bob_ha","BOB/ha"),("cost_bob_ha","BOB/ha"),
+                                        ("net_bob_ha","BOB/ha"),("net_usd_ha","USD/ha"),
+                                        ("roi_pct","%"),("downside_bob_ha","BOB/ha")]:
+                        out.writerow([clean(x) for x in [item["run_id"],"economic_budget",rec["id"],metric,
+                            rec["economics"][metric],unit,output["economics"]["market"]["sha256"],output["version"]]])
+                    for i,campaign in enumerate(rec["economics"]["campaigns"]):
+                        for metric,unit in [("price_bob_t","BOB/t"),("yield_t_ha","t/ha"),("cost_bob_ha","BOB/ha"),
+                                            ("break_even_price","BOB/t"),("break_even_yield","t/ha")]:
+                            out.writerow([clean(x) for x in [item["run_id"],f"economic_campaign_{i+1}",rec["id"],metric,
+                                campaign[metric],unit,output["economics"]["market"]["sha256"],output["version"]]])
         with (folder/"daily.csv").open("w",encoding="utf-8",newline="") as stream:
             out=csv.writer(stream)
             out.writerow(["run_id","scenario_id","rotation_id","source_id","model_version",*TRACE])
@@ -181,9 +195,9 @@ def render(item, lease, progress):
                 page.evaluate("document.fonts.ready")
                 page.pdf(path=pdf, print_background=True,prefer_css_page_size=True,
                          display_header_footer=True,header_template="<span></span>",
-                         footer_template='<div style="font:9px Arial;width:100%;padding:0 15mm;color:#52685b;display:flex;justify-content:space-between"><span>Júpiter Jr · Planificación agrícola</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>')
+                         footer_template='<div style="font:9px Arial;width:100%;padding:0 15mm;color:#52685b;display:flex;justify-content:space-between"><span>SkyField · Planificación agrícola</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>')
         document = PdfReader(pdf)
-        if len(document.pages)<2 or "Júpiter Jr" not in (document.pages[0].extract_text() or ""):
+        if len(document.pages)<2 or "SkyField" not in (document.pages[0].extract_text() or ""):
             raise JobError("El PDF generado no pasó la verificación de lectura.",True)
         hashes = {k:sha(folder/f) for k,f in {"pdf":"report.pdf","csv":"metrics.csv","daily":"daily.csv"}.items()}
         return key,hashes

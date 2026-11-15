@@ -107,5 +107,12 @@ def recommendation(record, reference, assumed, regional, priority):
         reasons.append("Valida la aptitud térmica y altitud para la horticultura de tu zona. Tomate y papa comparten familia y pueden compartir problemas sanitarios.")
     if assumed or regional:
         reasons.append("Verifica retención y profundidad con muestras locales antes de decidir la siembra.")
+    budget = record.get("economics")
+    if budget and budget["net_bob_ha"] is not None:
+        reasons.append(f"El presupuesto declarado estima {budget['net_bob_ha']:.0f} Bs/ha de utilidad en tres campañas, "
+                       f"con ingreso de {budget['revenue_bob_ha']:.0f} Bs/ha y costo total de {budget['cost_bob_ha']:.0f} Bs/ha. "
+                       f"En la prueba económica adversa quedan {budget['downside_bob_ha']:.0f} Bs/ha.")
+    elif budget:
+        reasons.append("Completa precio pactado, rendimiento y costo total de cada campaña para comparar utilidad y puntos de equilibrio.")
     return dict(title=title,reasons=reasons,source=NRCS,
-                check="Confirma ventana de siembra, cultivar, sanidad, disponibilidad de maquinaria, comprador y costos. El modelo no estima ingresos, erosión ni rendimiento.")
+                check="Confirma ventana de siembra, cultivar, sanidad, maquinaria, comprador y costos. El presupuesto usa rendimientos de referencia o declarados. La respuesta del rendimiento al clima y la erosión requieren calibración adicional.")

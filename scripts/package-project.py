@@ -11,7 +11,7 @@ EXCLUDED = {".git", ".local", ".venv", ".pytest_cache", "__pycache__", "node_mod
 def main():
     destination = ROOT / "deliverables"
     destination.mkdir(exist_ok=True)
-    archive = destination / "Jupiter-Jr-proyecto.zip"
+    archive = destination / "SkyField-proyecto.zip"
     files = []
     for folder, directories, names in os.walk(ROOT):
         directories[:] = sorted(d for d in directories if d not in EXCLUDED)
@@ -20,13 +20,13 @@ def main():
                 files.append(Path(folder) / name)
     with ZipFile(archive, "w", compression=ZIP_DEFLATED, compresslevel=9) as output:
         for path in files:
-            output.write(path, "Jupiter-Jr/" + path.relative_to(ROOT).as_posix())
+            output.write(path, "SkyField/" + path.relative_to(ROOT).as_posix())
     with ZipFile(archive) as output:
         if output.testzip() is not None:
             raise RuntimeError("The ZIP integrity check failed.")
         names = set(output.namelist())
         for required in ("Dockerfile", "render.yaml", "README.md", "PUBLICAR.md", "web/dist/index.html"):
-            if "Jupiter-Jr/" + required not in names:
+            if "SkyField/" + required not in names:
                 raise RuntimeError(f"The ZIP is missing {required}.")
     with archive.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()

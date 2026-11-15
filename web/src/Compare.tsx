@@ -3,12 +3,14 @@ import { Activity, AlertTriangle, ArrowLeft, ArrowRight, CloudRain, Download, Dr
   LoaderCircle, Thermometer } from 'lucide-react';
 import { api,errorText,n,post } from './client';
 import { ClimateChart, Plot } from './Chart';
-import type { Job, Option, Run, RunSummary, Task } from './types';
+import type { Job, Option, Run, RunSummary, Scenario, Task } from './types';
 import type { Go } from './App';
 import { EnvironmentalEvidence } from './EnvironmentalEvidence';
 import { VulnerabilityMap } from './VulnerabilityMap';
+import { EconomicsPanel } from './Economics';
+import { ClimateImpact, scenarioNames } from './ClimateImpact';
+import { WeatherPanel } from './Weather';
 
-type Scenario = 'historical'|'sensitivity';
 const metricTitles={deficit_mm:'Déficit hídrico',stress_days:'Días con déficit',cover_pct:'Cobertura estimada',irrigation_mm:'Riego simulado'};
 const units={deficit_mm:'mm',stress_days:'días',cover_pct:'%',irrigation_mm:'mm'};
 type Metric = keyof typeof units;
@@ -25,7 +27,7 @@ export function Compare({id,summary,go,refresh}:{id:string;summary?:RunSummary;g
       try{
         const get=await api<Run>('/analyses/'+id);
         if(!active)return;setRun(get);setError('');
-        if(get.result){setChoice(current=>current||get.result!.alternatives[0]?.id||'');return;}
+        if(get.result){setChoice(current=>current||get.result!.economics?.ranked_ids[0]||get.result!.alternatives[0]?.id||'');return;}
         const key=summary?.job_id??(await api<RunSummary[]>('/analyses')).find(x=>x.id===id)?.job_id;
         if(!key)throw new Error('No se encontró el trabajo de este análisis.');
         const progress=await api<Job>('/jobs/'+key);
@@ -82,13 +84,16 @@ export function Compare({id,summary,go,refresh}:{id:string;summary?:RunSummary;g
         <Kpi Icon={Thermometer} title="Temperatura media" value={n(data.source.mean_temp_c,2)} unit="°C" detail={data.source.source_class}/>
         <Kpi Icon={Layers} title="Días de clima" value={n(data.source.rows)} unit="" detail={data.source.missing_days+' ausentes · '+data.source.incomplete_days+' incompletos'}/>
       </div>
-      <section className="card panel" data-tour="results"><div className="section-head"><div><h2>Alternativas de rotación</h2><p>{data.alternatives.length} alternativas mostradas de {data.candidate_count} secuencias candidatas.</p></div>
-        <div className="segments" role="group" aria-label="Escenario"><button aria-pressed={scenario==='historical'} onClick={()=>setScenario('historical')}>Histórico</button><button aria-pressed={scenario==='sensitivity'} onClick={()=>setScenario('sensitivity')}>Sensibilidad</button></div></div>
+      <section className="card panel" data-tour="results"><div className="section-head"><div><h2>Alternativas de rotación</h2><p>{data.alternatives.length} alternativas agronómicas y económicas mostradas de {data.candidate_count} secuencias candidatas.</p></div>
+        <div className="segments" role="group" aria-label="Escenario">{Object.entries(scenarioNames).filter(([key])=>!['elnino','lanina'].includes(key)||data.enso?.status==='available').map(([key,label])=><button key={key} aria-pressed={scenario===key} onClick={()=>setScenario(key as Scenario)}>{label}</button>)}</div></div>
         {scenario==='sensitivity'&&<p className="notice">Hipótesis {n(run?.inputs.rainfall_shift_pct,1)} % de lluvia y {n(run?.inputs.warming_c,1)} °C de temperatura.</p>}
         {data.alternatives.length?<div className="option-grid">{data.alternatives.map((r,i)=><OptionCard key={r.id} option={r} i={i} selected={choice===r.id} scenario={scenario} onSelect={()=>{setChoice(r.id);setReport(undefined);setReportJob(undefined);setReportError('');}}/>)}</div>:
           <p className="notice">El calendario o los filtros actuales impiden una secuencia de tres cultivos. Revisa ventanas, duración, mes de cada campaña y perfil de suelo.</p>}
-        <p className="reference">{data.reference?'Referencia asumida a partir del cultivo anterior · '+data.reference.names.join(' → ')+' · Déficit '+n(data.reference.metrics[scenario].deficit_mm,1)+' mm':'La referencia requiere un cultivo anterior compatible con el modelo anual y el calendario elegido.'}</p>
+        <p className="reference">{data.reference?'Referencia asumida a partir del cultivo anterior · '+data.reference.names.join(' → ')+(data.reference.metrics[scenario]?' · Déficit '+n(data.reference.metrics[scenario]?.deficit_mm,1)+' mm':' · balance de referencia disponible en Histórico y Cambio personalizado'):'La referencia requiere un cultivo anterior compatible con el modelo anual y el calendario elegido.'}</p>
       </section>
+      {data.economics&&<EconomicsPanel summary={data.economics} options={data.alternatives} selected={selected} onSelect={value=>{setChoice(value);setReport(undefined);setReportJob(undefined);}} onEdit={()=>go('/lotes/'+run!.field.id+'/analizar')}/>}
+      {data.enso&&<ClimateImpact context={data.enso} option={selected} scenario={scenario} onScenario={setScenario}/>}
+      {run&&<WeatherPanel fieldId={run.field.id} initial={data.weather} climate={data.enso}/>}
       {selected&&metrics&&<section className="card panel"><div className="section-head"><div><h2>Calendario de la alternativa elegida</h2><p>{selected.names.join(' → ')}</p></div>
         <Leaf className="green" size={22}/></div>
         <div className="calendar">{selected.calendar.map((c,i)=><div key={i}><small>CAMPAÑA {i+1}</small><b>{c.crop}</b><span>Siembra en {new Intl.DateTimeFormat('es',{month:'long',timeZone:'UTC'}).format(new Date(Date.UTC(2020,c.month-1,1)))} · {c.duration} días</span></div>)}</div>
@@ -102,10 +107,10 @@ export function Compare({id,summary,go,refresh}:{id:string;summary?:RunSummary;g
       {data.environment&&<VulnerabilityMap/>}
       <div className="evidence-grid">
         <section className="card panel"><div className="section-head"><div><h2>Clima mensual histórico</h2><p>{data.source.product} · meses completos</p></div></div>
-          <div className="legend"><span><i/> Lluvia acumulada</span><span><i/> Temperatura media</span></div><ClimateChart monthly={data.monthly}/></section>
+          <div className="legend"><span><i/> Lluvia acumulada</span><span><i/> Temperatura media</span></div><ClimateChart monthly={data.monthly}/><p className="chart-reading">Las barras resumen la lluvia media de cada mes y la línea representa temperatura. Los meses con menor lluvia requieren revisar la reserva del suelo y el calendario antes de un cultivo de alta demanda.</p></section>
         <section className="card panel"><div className="section-head"><div><h2>Déficit por alternativa</h2><p>Media de las ventanas disponibles · mm</p></div></div>
-          {data.alternatives.some(r=>r.metrics[scenario].deficit_mm!==null)?<Plot label="Déficit hídrico por alternativa" data={[{type:'bar',x:data.alternatives.map((_,i)=>'Opción '+(i+1)),y:data.alternatives.map(r=>r.metrics[scenario].deficit_mm),marker:{color:data.alternatives.map(r=>r.id===choice?'#32775a':'#bed5a7')}}]} layout={{yaxis:{rangemode:'tozero',gridcolor:'#eef2eb'},showlegend:false}}/>:
-            <div className="plot-empty"><Droplets size={28}/><p>Completa las entradas hídricas para calcular este indicador.</p></div>}</section>
+          {data.alternatives.some(r=>r.metrics[scenario]?.deficit_mm!=null)?<Plot label="Déficit hídrico por alternativa" data={[{type:'bar',x:data.alternatives.map((_,i)=>'Opción '+(i+1)),y:data.alternatives.map(r=>r.metrics[scenario]?.deficit_mm),marker:{color:data.alternatives.map(r=>r.id===choice?'#32775a':'#bed5a7')}}]} layout={{yaxis:{rangemode:'tozero',gridcolor:'#eef2eb'},showlegend:false}}/>:
+            <div className="plot-empty"><Droplets size={28}/><p>Completa las entradas hídricas para calcular este indicador.</p></div>}<p className="chart-reading">Una barra menor indica menos agua de demanda que el suelo simulado pudo dejar de aportar. La alternativa elegida acumula {n(metrics?.deficit_mm,1)} mm de déficit en tres campañas. Compara también cobertura, exposición térmica y utilidad.</p></section>
       </div>
       {(!!data.climate_indicators?.length||data.moisture!==undefined)&&<section className="card panel"><div className="section-head"><div><h2>Vulnerabilidad climática del entorno</h2><p>Indicadores históricos del punto representativo y su grilla de origen.</p></div></div>
         {!!data.climate_indicators?.length&&<details className="form-details"><summary>Lluvia, demanda de agua, calor y frío por año</summary>
@@ -114,11 +119,11 @@ export function Compare({id,summary,go,refresh}:{id:string;summary?:RunSummary;g
             {type:'scatter',mode:'lines+markers',name:'ET₀',x:data.climate_indicators.map(x=>x.year),y:data.climate_indicators.map(x=>x.et0_mm),line:{color:'#a56836'}}]} layout={{yaxis:{title:'mm/año'},legend:{orientation:'h'}}}/>
           <div className="table-scroll"><table className="data-table"><thead><tr>{['Año','Lluvia (mm)','ET₀ (mm)','Lluvia − ET₀ (mm)','Temp. media (°C)','Días ≤0 °C¹','Días ≥35 °C²'].map(t=><th scope="col" key={t}>{t}</th>)}</tr></thead>
           <tbody>{data.climate_indicators.map(a=><tr key={a.year}>{[a.year,a.rain_mm,a.et0_mm,a.balance_mm,a.temp_c,a.frost_days,a.hot_days].map((v,i)=><td key={i}>{n(v,i===4?2:0)}</td>)}</tr>)}</tbody></table></div>
-          <p className="muted">¹ Mínima diaria. ² Máxima diaria. Son umbrales de exposición regional. La tolerancia depende del cultivo y su etapa. Lluvia menos ET₀ es un indicador climático, distinto del déficit calculado en la raíz.</p></details>}
+          <p className="chart-reading">Cuando ET₀ supera la lluvia, la atmósfera demanda más agua que la aportada por precipitación. La reserva de suelo y el riego pueden cubrir parte de esa diferencia.</p><p className="muted">¹ Mínima diaria. ² Máxima diaria. Son umbrales de exposición regional. La tolerancia depende del cultivo y su etapa. Lluvia menos ET₀ es un indicador climático, distinto del déficit calculado en la raíz.</p></details>}
         {data.moisture?<details className="form-details"><summary>Anomalías de humedad en la zona radicular</summary>
           <Plot label="Anomalía mensual de humedad radicular, puntos porcentuales" data={[{type:'bar',x:data.moisture.monthly.map(m=>m.month),
             y:data.moisture.monthly.map(m=>m.anomaly),marker:{color:data.moisture.monthly.map(m=>m.anomaly<0?'#b67142':'#32775a')}}]} layout={{yaxis:{title:'puntos porcentuales'},showlegend:false}}/>
-          <p><a href={data.moisture.url} target="_blank" rel="noreferrer">{data.moisture.source}</a> · {data.moisture.support}. La anomalía compara cada mes completo con la mediana del mismo mes en el histórico. Un valor negativo señala menor humedad relativa habitual.</p>
+          <p className="chart-reading">El último mes disponible registra {n(data.moisture.monthly.at(-1)?.anomaly,1)} puntos porcentuales respecto a la mediana de su mes calendario. Un valor bajo exige revisar la humedad efectiva en campo y las reservas antes de sembrar.</p><p><a href={data.moisture.url} target="_blank" rel="noreferrer">{data.moisture.source}</a> · {data.moisture.support}. La anomalía compara cada mes completo con la mediana del mismo mes en el histórico. Un valor negativo señala menor humedad relativa habitual.</p>
         </details>:data.moisture===null&&<p className="notice">La fuente de humedad regional no entregó una serie utilizable para este punto.</p>}
         <details className="form-details"><summary>Cómo interpretar los datos y sus escalas</summary>
           <dl className="glossary"><dt>Evapotranspiración</dt><dd>Agua que se evapora del suelo y que transpiran las plantas. ET₀ representa la demanda atmosférica para una superficie de referencia.</dd>
@@ -140,7 +145,7 @@ export function Compare({id,summary,go,refresh}:{id:string;summary?:RunSummary;g
           <p className="hash">SHA-256 {data.source.sha256}</p><ul>{data.limitations.map(x=><li key={x}>{x}</li>)}</ul>
           <a href={data.catalog_source} target="_blank" rel="noreferrer">FAO 56</a></details>
       </section>
-      {selected&&<section className="card panel export"><div className="section-head"><div><h2>Informe del análisis</h2><p>{selected.names.join(' → ')} · resumen histórico y sensibilidad</p></div>
+      {selected&&<section className="card panel export" data-tour="export"><div className="section-head"><div><h2>Informe del análisis</h2><p>{selected.names.join(' → ')} · clima, sensibilidad y presupuesto</p></div>
         <button className="button primary" disabled={busy||reportJob?.status==='queued'||reportJob?.status==='running'} onClick={()=>void makeReport()}><FileText size={17}/>{busy?'Enviando…':'Generar informe'}<ArrowRight size={16}/></button></div>
         {reportError&&<p className="error" role="alert">{reportError}</p>}
         {reportJob&&(reportJob.status==='queued'||reportJob.status==='running')&&<p className="notice" aria-live="polite"><LoaderCircle className="spin" size={16}/> Generando PDF y CSV · {reportJob.progress}%</p>}
@@ -156,9 +161,11 @@ function Kpi({Icon,title,value,unit,detail}:{Icon:typeof CloudRain;title:string;
   return <section className="card metric"><span className="metric-icon"><Icon size={19}/></span><span className="metric-label">{title}</span><strong>{value} <small>{unit}</small></strong><span className="muted">{detail}</span></section>;
 }
 function OptionCard({option,i,selected,scenario,onSelect}:{option:Option;i:number;selected:boolean;scenario:Scenario;onSelect:()=>void}){
+  const metrics=option.metrics[scenario];
   return <button className={'option '+(selected?'selected':'')} aria-pressed={selected} onClick={onSelect}>
     <span className="option-top"><span>Opción {i+1}</span><b>{n(option.score,1)} pts</b></span><strong>{option.names.join(' → ')}</strong>
-    <dl>{(['deficit_mm','stress_days','cover_pct'] as Metric[]).map(k=><div key={k}><dt>{metricTitles[k]}</dt><dd>{option.metrics[scenario][k]===null?'Pendiente':n(option.metrics[scenario][k],1)+' '+units[k]}</dd></div>)}</dl>
+    {option.economic_top&&<span className="chip">Mayor utilidad estimada</span>}
+    <dl>{(['deficit_mm','stress_days','cover_pct'] as Metric[]).map(k=><div key={k}><dt>{metricTitles[k]}</dt><dd>{metrics?.[k]==null?'Pendiente':n(metrics[k],1)+' '+units[k]}</dd></div>)}</dl>
     <span className="option-bottom">{selected?'Seleccionada':'Seleccionar alternativa'} <ArrowRight size={15}/></span>
   </button>;
 }
