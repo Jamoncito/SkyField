@@ -11,7 +11,7 @@ COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 PYTHONPATH=/app/backend \
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright \
-    PATH="/app/.venv/bin:$PATH" MPLCONFIGDIR=/tmp/jupiter-matplotlib \
+    PATH="/app/.venv/bin:$PATH" \
     SERVE_WEB=1 SECURE_COOKIES=1 PRIVATE_STORAGE=/private
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project \

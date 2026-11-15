@@ -95,7 +95,7 @@ ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;b
 <table><thead><tr><th>Escenario</th><th>Déficit mm</th><th>Cambio del déficit</th><th>Días con déficit</th><th>Días ≥35 °C</th></tr></thead><tbody>{% for key,label in [('historical','Histórico'),('sensitivity','Cambio personalizado'),('elnino','Súper Niño'),('lanina','Súper Niña')] %}{% if selected.metrics[key] is defined %}{% set m=selected.metrics[key] %}{% set base=selected.metrics.historical.deficit_mm %}<tr><td>{{label}}</td><td>{{m.deficit_mm if m.deficit_mm is not none else 'Pendiente'}}</td><td>{% if base is not none and base>0 and m.deficit_mm is not none %}{{'%.1f'|format(100*(m.deficit_mm-base)/base)}} %{% else %}Consultar diferencia absoluta{% endif %}</td><td>{{m.stress_days}}</td><td>{{m.hot_days}}</td></tr>{% endif %}{% endfor %}</tbody></table>
 <p>Un aumento de déficit indica más demanda de agua sin cubrir en el suelo simulado. Contrasta cultivos de menor demanda, rastrojo y calendario. Una lluvia mayor exige revisar drenaje y oportunidad de labores con observaciones locales.</p>
 <h3>Respuesta mensual asociada a ENSO</h3><table><thead><tr><th>Mes</th><th>Niño lluvia (%)</th><th>Niño temp. (°C)</th><th>Niña lluvia (%)</th><th>Niña temp. (°C)</th><th>Años</th></tr></thead><tbody>{% for month in output.enso.months %}<tr><td>{{month.month}}</td><td>{{month.elnino.rain_pct}}</td><td>{{month.elnino.temp_c}}</td><td>{{month.lanina.rain_pct}}</td><td>{{month.lanina.temp_c}}</td><td>{{month.n}}</td></tr>{% endfor %}</tbody></table>
-<h3>Método e incertidumbre</h3><p>{{output.enso.method}}</p><p>{{output.enso.uncertainty}}</p><p>{{output.enso.climate_change}}</p><p class="source"><a href="{{output.enso.source_url}}">NASA POWER mensual</a>. <a href="{{output.enso.index_url}}">NOAA CPC RONI</a>. La vista web conserva los intervalos por mes y la marca de extrapolación.</p>
+<h3>Método e incertidumbre</h3><p>{{output.enso.method}}</p><p>Los intervalos aproximados del 95 % usan Newey-West HAC con 3 rezagos anuales. La sección de validación presenta errores retrospectivos, limitaciones y condiciones de interpretación.</p><p>{{output.enso.climate_change}}</p><p class="source"><a href="{{output.enso.source_url}}">NASA POWER mensual</a>. <a href="{{output.enso.index_url}}">NOAA CPC RONI</a>. La vista web conserva los intervalos por mes y la marca de extrapolación.</p>
 </article>
 {% endif %}
 {% if output.weather %}{% set weather=output.weather %}
@@ -106,6 +106,31 @@ ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;b
 {% if weather.month and weather.month.rain_mm %}<h3>Próximos {{weather.month.days}} días</h3><p>Lluvia P10 / P50 / P90 {{weather.month.rain_mm|join(' / ')}} mm. Temperatura media P10 / P50 / P90 {{weather.month.temp_c|join(' / ')}} °C. {{weather.month.members}} miembros. Intervalo {{weather.month.start}} a {{weather.month.end}}.</p>{% endif %}
 {% if weather.seasonal %}<h3>Perspectiva estacional del conjunto</h3><table><thead><tr><th>Mes</th><th>Días cubiertos</th><th>Lluvia P10 / P50 / P90 (mm)</th><th>Temp. P10 / P50 / P90 (°C)</th></tr></thead><tbody>{% for m in weather.seasonal %}<tr><td>{{m.month}}</td><td>{{m.days}}</td><td>{{m.rain_mm|join(' / ') if m.rain_mm else 'Sin dato'}}</td><td>{{m.temp_c|join(' / ') if m.temp_c else 'Sin dato'}}</td></tr>{% endfor %}</tbody></table>{% endif %}
 <p>{{weather.method}}</p><p>{{weather.interpretation}}</p><p>Las barras y percentiles permiten reconocer incertidumbre y preparar opciones. Verifica humedad, alertas locales, viento y estado del cultivo al acercarse la labor.</p><p class="source"><a href="{{weather.source_url}}">Open-Meteo, pronóstico</a>. <a href="{{weather.seasonal_url}}">Open-Meteo, perspectiva estacional</a>. <a href="https://senamhi.gob.bo/">SENAMHI Bolivia</a>.</p>
+</article>
+{% endif %}
+{% if output.quality %}
+<article class="report-page">
+<header>SkyField <small>Calidad y confiabilidad de los datos</small></header>
+<h2>Integridad de entradas {{output.quality.score}} / 100</h2>
+<p>{{output.quality.level}} · {{output.quality.assessed_on}}</p><p>{{output.quality.interpretation}}</p>
+<p class="note"><b>{{output.quality.validation}}</b></p>
+<table><thead><tr><th>Componente</th><th>Puntos</th><th>Evidencia</th></tr></thead><tbody>
+{% for c in output.quality.components %}<tr><td>{{c.label}}</td><td>{{c.points}} / {{c.maximum}}</td><td>{{c.detail}}</td></tr>{% endfor %}
+</tbody></table><h3>Verificaciones para la decisión de campo</h3><ul>{% for warning in output.quality.warnings %}<li>{{warning}}</li>{% endfor %}</ul>
+<p>Ponderaciones de diseño para revisar integridad y disponibilidad. Cada componente identifica los datos usados y los supuestos pendientes.</p>
+<p>El productor confirma muestreo de suelo, variedad, oportunidad de labores, oferta del comprador y costos completos con su equipo agronómico.</p>
+</article>
+{% endif %}
+{% if output.enso and output.enso.months and output.enso.months[0].validation is defined %}
+<article class="report-page">
+<header>SkyField <small>Validación retrospectiva de la asociación ENSO</small></header>
+<h2>Error fuera de la muestra de entrenamiento</h2>
+<p>Entrenamiento creciente desde 20 años y evaluación en el año siguiente con RONI observado. La referencia utiliza solo la tendencia temporal. Un valor positivo de habilidad indica menor error cuadrático. La habilidad negativa exige cautela al interpretar ENSO.</p>
+<table><thead><tr><th>Mes</th><th>Años</th><th>RMSE lluvia mm</th><th>Habilidad lluvia %</th><th>RMSE temp. °C</th><th>Habilidad temp. %</th></tr></thead><tbody>
+{% for m in output.enso.months %}<tr><td>{{m.month}}</td><td>{{m.validation.rain.n}}</td><td>{{'%.1f'|format(m.validation.rain.rmse)}}</td><td>{{'%.1f'|format(m.validation.rain.skill_pct) if m.validation.rain.skill_pct is not none else 'Pendiente'}}</td><td>{{'%.2f'|format(m.validation.temperature.rmse)}}</td><td>{{'%.1f'|format(m.validation.temperature.skill_pct) if m.validation.temperature.skill_pct is not none else 'Pendiente'}}</td></tr>{% endfor %}
+</tbody></table>
+<p>RMSE es la raíz del error cuadrático medio. La habilidad compara el error cuadrático con la referencia temporal. Los valores se calculan por mes y conservan las unidades de origen.</p>
+<p>{{output.enso.uncertainty}}</p><p>Esta verificación evalúa una asociación histórica con el índice observado. La operación futura necesita además pronósticos de ENSO y validación local del cultivo.</p>
 </article>
 {% endif %}
 </body></html>

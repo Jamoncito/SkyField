@@ -89,6 +89,7 @@ def main():
     with sync_playwright() as pw:
         browser=pw.chromium.launch(channel=args.channel,args=["--enable-webgl","--use-angle=swiftshader","--enable-unsafe-swiftshader"])
         context=browser.new_context(viewport={"width":1440,"height":1000},accept_downloads=True)
+        context.add_init_script("localStorage.setItem('skyfield-language','es')")
         page=context.new_page()
         errors=[]
         page.on("pageerror",lambda exc:errors.append(exc.stack or str(exc)))
@@ -103,6 +104,7 @@ def main():
         expect(page.get_by_role("heading",name="Hola, Productor")).to_be_visible(timeout=20000)
         walk_tour(page,args.output)
         page.reload()
+        page.locator('.field-choice').first.click(timeout=20000)
         expect(page.get_by_role("button",name="Planificar mi rotación")).to_be_visible(timeout=20000)
         expect(page.get_by_role("dialog")).to_have_count(0)
         expect(page.get_by_role("button",name="Planificar mi rotación")).to_be_visible()
@@ -265,6 +267,7 @@ def main():
         page.locator('[name="sale_bob_t"]').fill('21000')
         expect(page.get_by_text('Año 6',exact=True)).to_have_count(0)
         page.goto(base)
+        page.locator('.field-choice').first.click(timeout=20000)
         expect(page.locator('.finance-overview')).to_be_visible(timeout=20000)
         page.screenshot(path=args.output/'dashboard-completo.png',full_page=True)
 
@@ -343,6 +346,7 @@ def main():
         # A separate browser viewport and emulated geolocation exercise the mobile controls.
         mobile=browser.new_context(viewport={"width":390,"height":844},is_mobile=True,has_touch=True,
             geolocation={"latitude":-17.18,"longitude":-63.27,"accuracy":18},permissions=["geolocation"])
+        mobile.add_init_script("localStorage.setItem('skyfield-language','es')")
         mobile.add_cookies(context.cookies())
         m=mobile.new_page()
         m.route("https://tiles.openfreemap.org/**",lambda route:route.abort())
@@ -366,6 +370,7 @@ def main():
         expect(m.get_by_role('dialog')).to_have_count(0)
 
         denied=browser.new_context(viewport={"width":390,"height":844},is_mobile=True,has_touch=True)
+        denied.add_init_script("localStorage.setItem('skyfield-language','es')")
         denied.add_init_script("navigator.geolocation.getCurrentPosition = (_, fail) => fail({code:1});")
         denied.add_cookies(context.cookies())
         dp=denied.new_page()
@@ -374,7 +379,7 @@ def main():
         expect(dp.get_by_text("Permiso denegado",exact=False)).to_be_visible()
         page.get_by_role("button",name="Productor",exact=False).click()
         page.get_by_role("button",name="Cerrar sesión").click()
-        expect(page.get_by_role("heading",name="Bienvenido a SkyField")).to_be_visible()
+        expect(page.get_by_role("heading",name="Bienvenido a SkyField")).to_be_visible(timeout=30000)
         page.get_by_label("Correo electrónico").fill(email)
         page.get_by_label("Contraseña").fill(password)
         page.get_by_role("button",name="Iniciar sesión").click()

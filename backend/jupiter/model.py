@@ -7,7 +7,7 @@ import numpy as np
 from .climate import COLS
 from .jobs import JobError
 
-VERSION = "skyfield-water-2.0.0"
+VERSION = "skyfield-water-2.1.0"
 CATALOG_VERSION = "fao56-regional-3"
 FAO = "https://www.fao.org/4/x0490e/x0490e00.htm"
 # FAO 56 tables 11, 12, 22 and 23 provide reference coefficients and ranges.

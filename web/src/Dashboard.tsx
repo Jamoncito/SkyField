@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -14,7 +15,7 @@ import type { Market, Report, Run, RunSummary, Site, User } from "./types";
 import { useMarket } from "./Economics";
 import { Plot } from "./Chart";
 import { WeatherPanel } from "./Weather";
-
+import { DataQuality } from "./DataQuality";
 export function RegionalDashboard({
   market,
   compact = false,
@@ -30,9 +31,9 @@ export function RegionalDashboard({
   const index = market.agriculture.years.indexOf(year);
   const crops = market.agriculture.campaigns.filter((c) => c.season === season);
   const title = {
-    production_t: "Producción (t)",
-    yield_t_ha: "Rendimiento (t/ha)",
-    area_ha: "Superficie sembrada (ha)",
+    production_t: tr("Producción (t)"),
+    yield_t_ha: tr("Rendimiento (t/ha)"),
+    area_ha: tr("Superficie sembrada (ha)"),
   }[metric];
   const top = [...crops].sort((a, b) => b[metric][index] - a[metric][index])[0];
   return (
@@ -40,17 +41,20 @@ export function RegionalDashboard({
       <div className="section-head">
         <div>
           <span className="section-kicker">
-            <Sprout size={16} /> Observatorio del oriente
+            <Sprout size={16} />
+            {tr(" Observatorio del oriente ")}
           </span>
-          <h2>Santa Cruz en datos</h2>
+          <h2>{tr("Santa Cruz en datos")}</h2>
           <p>
-            CAO · campañas agrícolas de {year} · datos regionales publicados
+            {tr(" CAO · campañas agrícolas de ")}
+            {year}
+            {tr(" · datos regionales publicados ")}
           </p>
         </div>
         <label className="inline-select">
-          Año
+          {tr(" Año ")}
           <select
-            aria-label="Año CAO"
+            aria-label={tr("Año CAO")}
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
           >
@@ -61,34 +65,34 @@ export function RegionalDashboard({
         </label>
       </div>
       <div className="dashboard-controls">
-        <div className="segments" aria-label="Campaña CAO">
+        <div className="segments" aria-label={tr("Campaña CAO")}>
           <button
             type="button"
             aria-pressed={season === "summer"}
             onClick={() => setSeason("summer")}
           >
-            Verano
+            {tr(" Verano ")}
           </button>
           <button
             type="button"
             aria-pressed={season === "winter"}
             onClick={() => setSeason("winter")}
           >
-            Invierno
+            {tr(" Invierno ")}
           </button>
         </div>
         <select
-          aria-label="Indicador CAO"
+          aria-label={tr("Indicador CAO")}
           value={metric}
           onChange={(e) => setMetric(e.target.value as typeof metric)}
         >
-          <option value="production_t">Producción en toneladas</option>
-          <option value="yield_t_ha">Rendimiento por hectárea</option>
-          <option value="area_ha">Superficie sembrada</option>
+          <option value="production_t">{tr("Producción en toneladas")}</option>
+          <option value="yield_t_ha">{tr("Rendimiento por hectárea")}</option>
+          <option value="area_ha">{tr("Superficie sembrada")}</option>
         </select>
       </div>
       <Plot
-        label={title + " por cultivo en Santa Cruz, CAO " + year}
+        label={title + tr(" por cultivo en Santa Cruz, CAO ") + year}
         data={[
           {
             type: "bar",
@@ -113,15 +117,19 @@ export function RegionalDashboard({
         <Sprout size={18} />
         {top && (
           <span>
-            {top.name} registra el mayor valor de este grupo, con{" "}
+            {top.name}
+            {tr(" registra el mayor valor de este grupo, con")}{" "}
             {n(top[metric][index], metric === "yield_t_ha" ? 2 : 0)}{" "}
             {metric === "production_t"
-              ? "toneladas"
+              ? tr("toneladas")
               : metric === "yield_t_ha"
                 ? "t/ha"
-                : "hectáreas"}{" "}
-            en {year}. El volumen ayuda a reconocer cadenas y compradores.
-            Contrasta rendimiento, costos y aptitud de tu propio terreno.
+                : tr("hectáreas")}{" "}
+            {tr(" en ")}
+            {year}
+            {tr(
+              ". El volumen ayuda a reconocer cadenas y compradores. Contrasta rendimiento, costos y aptitud de tu propio terreno. ",
+            )}
           </span>
         )}
       </p>
@@ -130,12 +138,12 @@ export function RegionalDashboard({
           <table className="data-table">
             <thead>
               <tr>
-                <th>Cultivo</th>
-                <th>Área (ha)</th>
-                <th>Rendimiento (t/ha)</th>
-                <th>Producción (t)</th>
+                <th>{tr("Cultivo")}</th>
+                <th>{tr("Área (ha)")}</th>
+                <th>{tr("Rendimiento (t/ha)")}</th>
+                <th>{tr("Producción (t)")}</th>
                 <th>
-                  Cambio de rendimiento frente a{" "}
+                  {tr(" Cambio de rendimiento frente a")}{" "}
                   {year === 2022 ? "—" : year - 1}
                 </th>
               </tr>
@@ -163,11 +171,12 @@ export function RegionalDashboard({
         </div>
       )}
       <details className="form-details">
-        <summary>Fuente y contexto de las campañas</summary>
+        <summary>{tr("Fuente y contexto de las campañas")}</summary>
         <p>{market.agriculture.note}</p>
         <p>
-          Publicación {market.agriculture.published}. Cuadros de verano e
-          invierno, páginas PDF 9 y 10.
+          {tr(" Publicación ")}
+          {market.agriculture.published}
+          {tr(". Cuadros de verano e invierno, páginas PDF 9 y 10. ")}
         </p>
         <div className="source-links">
           <a
@@ -175,17 +184,16 @@ export function RegionalDashboard({
             target="_blank"
             rel="noreferrer"
           >
-            Informe CAO 2024
+            {tr(" Informe CAO 2024 ")}
           </a>
           <a href={market.agriculture.url} target="_blank" rel="noreferrer">
-            Estadísticas de la CAO
+            {tr(" Estadísticas de la CAO ")}
           </a>
         </div>
       </details>
     </section>
   );
 }
-
 export function SkyDashboard({
   user,
   sites,
@@ -203,7 +211,7 @@ export function SkyDashboard({
     [run, setRun] = useState<Run>(),
     [error, setError] = useState("");
   const { market, error: marketError } = useMarket();
-  const site = sites.find((s) => s.id === fieldId) ?? sites[0];
+  const site = sites.find((s) => s.id === fieldId);
   const last = runs.find((r) => r.field_id === site?.id && r.status === "done");
   useEffect(() => {
     let active = true;
@@ -237,44 +245,95 @@ export function SkyDashboard({
   const moisture = output?.moisture?.monthly.at(-1);
   const ph = currentRun?.inputs.soil_ph ?? output?.regional_soil?.surface.phh2o;
   const cropName =
-    market?.agriculture.campaigns.find((c) => c.crop === run?.inputs.previous)
-      ?.name ??
-    (run?.inputs.previous === "unknown"
-      ? "Por declarar"
-      : (run?.inputs.previous ?? "Por declarar"));
+    market?.agriculture.campaigns.find(
+      (c) => c.crop === currentRun?.inputs.previous,
+    )?.name ??
+    (currentRun?.inputs.previous === "unknown"
+      ? tr("Por declarar")
+      : (currentRun?.inputs.previous ?? tr("Por declarar")));
   return (
     <>
       <div className="dashboard-heading" data-tour="dashboard">
         <div>
-          <h1>Hola, {user.name.split(" ")[0]}</h1>
-          <p>Selecciona un lote para revisar su clima y presupuesto.</p>
+          <h1>
+            {tr("Hola, ")}
+            {user.name.split(" ")[0]}
+          </h1>
+          <p>{tr("Selecciona un lote para revisar su clima y presupuesto.")}</p>
         </div>
         <button className="button primary" onClick={() => go("/lotes/nuevo")}>
-          <Plus size={17} /> Agregar lote
+          <Plus size={17} />
+          {tr(" Agregar lote ")}
         </button>
       </div>
-      <section className="sky-hero">
-        <div>
-          <h2>
-            Planifica tu próxima
-            <br />
-            rotación
-          </h2>
-          <p>
-            Compara agua, cobertura y rentabilidad de tres campañas anuales.
-          </p>
-          <button
-            className="button lime"
-            onClick={() =>
-              go(site ? "/lotes/" + site.id + "/analizar" : "/lotes/nuevo")
-            }
-          >
-            {site ? "Planificar mi rotación" : "Crear mi primer lote"}
-            <ArrowRight size={17} />
-          </button>
+      <section className="card panel field-picker" data-tour="field-picker">
+        <div className="section-head">
+          <div>
+            <h2>{tr("Elige el lote que quieres revisar")}</h2>
+            <p>
+              {tr(
+                "Abre un terreno para consultar su tiempo, suelo, análisis y presupuesto.",
+              )}
+            </p>
+          </div>
         </div>
-        <small>Vista agrícola aérea generada para SkyField</small>
+        {sites.length ? (
+          <div className="field-choices">
+            {sites.map((s) => (
+              <button
+                key={s.id}
+                className={
+                  "field-choice " + (s.id === fieldId ? "selected" : "")
+                }
+                aria-pressed={s.id === fieldId}
+                onClick={() => setFieldId(s.id)}
+              >
+                <MapPin size={22} />
+                <span>
+                  <b>{s.name}</b>
+                  <small>
+                    {n(s.lat, 5)}°, {n(s.lon, 5)}°
+                    {s.area_ha != null ? " · " + n(s.area_ha, 2) + " ha" : ""}
+                  </small>
+                </span>
+                <ArrowRight size={18} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p>
+            {tr(
+              "Todavía no hay lotes guardados. Crea tu primer terreno para comenzar.",
+            )}
+          </p>
+        )}
       </section>
+      {site && (
+        <section className="sky-hero">
+          <div>
+            <h2>
+              {tr(" Planifica tu próxima ")}
+              <br />
+              {tr(" rotación ")}
+            </h2>
+            <p>
+              {tr(
+                " Compara agua, cobertura y rentabilidad de tres campañas anuales. ",
+              )}
+            </p>
+            <button
+              className="button lime"
+              onClick={() =>
+                go(site ? "/lotes/" + site.id + "/analizar" : "/lotes/nuevo")
+              }
+            >
+              {site ? tr("Planificar mi rotación") : tr("Crear mi primer lote")}
+              <ArrowRight size={17} />
+            </button>
+          </div>
+          <small>{tr("Vista agrícola aérea generada para SkyField")}</small>
+        </section>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -285,7 +344,7 @@ export function SkyDashboard({
           <div className="farm-heading">
             <h2>{site.name}</h2>
             <select
-              aria-label="Lote del dashboard"
+              aria-label={tr("Lote del dashboard")}
               value={site.id}
               onChange={(e) => setFieldId(e.target.value)}
             >
@@ -299,24 +358,31 @@ export function SkyDashboard({
               className="text-button"
               onClick={() => go("/lotes/" + site.id)}
             >
-              Abrir ficha <ArrowRight size={15} />
+              {tr(" Abrir ficha ")}
+              <ArrowRight size={15} />
             </button>
           </div>
+          <WeatherPanel
+            key={site.id}
+            fieldId={site.id}
+            climate={output?.enso}
+          />
+          <DataQuality quality={output?.quality} />
           <div className="farm-strip">
             <div>
               <Sprout size={23} />
               <span>
-                <small>Último cultivo declarado</small>
+                <small>{tr("Último cultivo declarado")}</small>
                 <b>{cropName}</b>
               </span>
             </div>
             <div>
               <MapPin size={23} />
               <span>
-                <small>Superficie delimitada</small>
+                <small>{tr("Superficie delimitada")}</small>
                 <b>
                   {site.area_ha == null
-                    ? "Punto de consulta"
+                    ? tr("Punto de consulta")
                     : n(site.area_ha, 2) + " ha"}
                 </b>
               </span>
@@ -324,8 +390,10 @@ export function SkyDashboard({
             <div>
               <CloudSun size={23} />
               <span>
-                <small>Último análisis</small>
-                <b>{run ? day(run.created) : "Por realizar"}</b>
+                <small>{tr("Último análisis")}</small>
+                <b>
+                  {currentRun ? day(currentRun.created) : tr("Por realizar")}
+                </b>
               </span>
             </div>
           </div>
@@ -333,38 +401,42 @@ export function SkyDashboard({
             <section className="card soil-summary">
               <div>
                 <span>
-                  <Droplets size={18} /> Humedad radicular regional
+                  <Droplets size={18} />
+                  {tr(" Humedad radicular regional ")}
                 </span>
                 <strong>
-                  {moisture ? n(moisture.wetness, 0) + " %" : "Por consultar"}
+                  {moisture
+                    ? n(moisture.wetness, 0) + " %"
+                    : tr("Por consultar")}
                 </strong>
                 <small>
                   {moisture
                     ? moisture.month +
-                      " · POWER GWETROOT, humedad relativa regional"
-                    : "Aparece al analizar el lote"}
+                      tr(" · POWER GWETROOT, humedad relativa regional")
+                    : tr("Aparece al analizar el lote")}
                 </small>
               </div>
               <div>
-                <span>pH del suelo</span>
-                <strong>{ph == null ? "Por consultar" : n(ph, 1)}</strong>
+                <span>{tr("pH del suelo")}</span>
+                <strong>{ph == null ? tr("Por consultar") : n(ph, 1)}</strong>
                 <small>
-                  {run?.inputs.soil_ph != null
-                    ? "Medición declarada"
-                    : "Predicción regional SoilGrids"}
+                  {currentRun?.inputs.soil_ph != null
+                    ? tr("Medición declarada")
+                    : tr("Predicción regional SoilGrids")}
                 </small>
               </div>
               <div>
-                <span>Lotes de tu cuenta</span>
+                <span>{tr("Lotes de tu cuenta")}</span>
                 <strong>{sites.length}</strong>
                 <small>
-                  {reports.filter((r) => r.ready).length} informes disponibles
+                  {reports.filter((r) => r.ready).length}
+                  {tr(" informes disponibles ")}
                 </small>
               </div>
             </section>
             <section className="card panel finance-overview">
               <div className="section-head">
-                <h2>Finanzas de la rotación</h2>
+                <h2>{tr("Finanzas de la rotación")}</h2>
                 <Banknote className="green" size={22} />
               </div>
               <div className="finance-content">
@@ -376,56 +448,59 @@ export function SkyDashboard({
                 >
                   <div>
                     <strong>{percent}%</strong>
-                    <small>costos completos</small>
+                    <small>{tr("costos completos")}</small>
                   </div>
                 </div>
                 <div className="finance-numbers">
                   <div>
-                    <small>Ingreso bruto estimado · Bs/ha</small>
+                    <small>{tr("Ingreso bruto estimado · Bs/ha")}</small>
                     <strong>{n(budget?.revenue_bob_ha, 0)}</strong>
                   </div>
                   <div>
-                    <small>Utilidad estimada · Bs/ha</small>
+                    <small>{tr("Utilidad estimada · Bs/ha")}</small>
                     <strong>{n(budget?.net_bob_ha, 0)}</strong>
                   </div>
                 </div>
               </div>
               <p className="muted">
                 {best
-                  ? best.names.join(" → ") + " · total de tres campañas"
-                  : "Configura un análisis para comparar tus opciones."}
+                  ? best.names.join(" → ") + tr(" · total de tres campañas")
+                  : tr("Configura un análisis para comparar tus opciones.")}
               </p>
               <button
                 className="text-button"
                 onClick={() =>
                   go(
-                    run
-                      ? "/comparar/" + run.id
+                    currentRun
+                      ? "/comparar/" + currentRun.id
                       : "/lotes/" + site.id + "/analizar",
                   )
                 }
               >
-                {run ? "Revisar clima y rentabilidad" : "Preparar presupuesto"}
+                {currentRun
+                  ? tr("Revisar clima y rentabilidad")
+                  : tr("Preparar presupuesto")}
                 <ArrowRight size={15} />
               </button>
             </section>
           </div>
-          <WeatherPanel fieldId={site.id} initial={output?.weather} compact />
+          {market && <RegionalDashboard market={market} compact />}
         </>
-      ) : (
+      ) : !sites.length ? (
         <section className="card panel first-field">
           <Sprout size={28} />
-          <h2>Comienza con tu primer terreno</h2>
+          <h2>{tr("Comienza con tu primer terreno")}</h2>
           <p>
-            Elige un punto, usa el piloto de Santa Cruz o dibuja tu lote en el
-            mapa.
+            {tr(
+              " Elige un punto, usa el piloto de Santa Cruz o dibuja tu lote en el mapa. ",
+            )}
           </p>
           <button className="button primary" onClick={() => go("/lotes/nuevo")}>
-            Crear mi primer lote <ArrowRight size={16} />
+            {tr(" Crear mi primer lote ")}
+            <ArrowRight size={16} />
           </button>
         </section>
-      )}
-      {market && <RegionalDashboard market={market} compact />}
+      ) : null}
       {marketError && <p className="error">{marketError}</p>}
     </>
   );

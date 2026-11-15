@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Rotation Report SkyField</title>
+<style>
+@page {size:A4;margin:13mm 14mm 17mm}
+*{box-sizing:border-box} body{margin:0;font:10pt Arial,sans-serif;color:#163629;line-height:1.38}
+header{min-height:33px;margin-bottom:5mm;break-inside:avoid;font-size:15pt;font-weight:700}
+header img{width:33px;height:33px;vertical-align:middle;margin-right:9px}
+header small{font-size:8pt;font-weight:400;color:#546c5f;margin-left:5mm}
+.hero{background:#123a2c;color:white;padding:7mm;border-radius:4mm;margin-bottom:5mm}
+.hero h1{margin:1mm 0 2mm;font-size:26pt;line-height:1.06;letter-spacing:-.8pt}
+.hero p{margin:0;color:#d3e2d9}.tag{color:#dcf882;font-weight:bold;text-transform:uppercase;font-size:8pt;letter-spacing:1pt}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:5mm;margin:0 0 4mm}
+.card{padding:4mm;border:1px solid #dee7dc;border-radius:3mm;background:#f7f9f4}
+.card p{margin:1.4mm 0} h2{font-size:14pt;margin:3mm 0 2mm} h3{margin:0 0 1.5mm;font-size:11pt}
+.map{width:100%;height:36mm;object-fit:cover;border-radius:2mm}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin-bottom:4mm}.kpi strong{font-size:17pt;display:block}
+.plot{width:100%;height:61mm;object-fit:contain;display:block;margin-bottom:1mm}.plot.comparison{height:45mm}.source{font-size:8pt;color:#536d5d;margin:0;overflow-wrap:anywhere}
+table{border-collapse:collapse;width:100%;font-size:9pt;margin-bottom:3mm} td,th{text-align:left;border-bottom:1px solid #dde7db;padding:1.3mm}
+th{background:#e9f0e6}.chosen{background:#e8f2d5}.report-page+.report-page{break-before:page} section,table,tr{break-inside:avoid}
+ol,ul{margin:1mm 0 3mm;padding-left:5mm} li{margin:1mm 0}.note{padding:3mm 4mm;background:#eef3e6;border-radius:2mm;margin-top:3mm}
+</style><body><article class="report-page">
+<header><img src="{{logo}}" alt="">SkyField <small>Report {{item.id|string|truncate(13,True,'')}} · {{item.created.date().isoformat()}}</small></header>
+<div class="hero"><div class="tag">{{output.status}} · Illustrative catalog</div><h1>Agricultural rotation report</h1><p>{{field.name}} · {{item.producer}}</p></div>
+<div class="grid"><div class="card"><h3>Field record</h3><p>{{'%.6f'|format(field.lat)}}°, {{'%.6f'|format(field.lon)}}° WGS 84</p>
+<p>{% if field.area_ha %}{{'%.2f'|format(field.area_ha)}} has{% else %}Exploratory point · field boundary pending{% endif %}</p>
+<p>Version {{field.version}} · {{field.source}}</p><p>Priority {{{'balanced':'Balanced','water':'Water','cover':'Coverage','diversity':'Diversity'}[item.inputs.priority]}}</p></div><div class="card"><img class="map" src="{{map_data}}" alt="Mapa esquemático del lote con norte y escala"></div></div>
+<h2>{{selected.names|join(' → ')}}</h2>
+<div class="kpis">{% for key in ['deficit_mm','stress_days','cover_pct'] %}{% set v=selected.metrics.historical[key] %}<div class="card kpi">{{metrics[key][0]}}<strong>{{v if v is not none else 'Pending'}}{% if v is not none %} <small>{{metrics[key][1]}}</small>{% endif %}</strong></div>{% endfor %}</div>
+<h2>Historical climate of the point</h2><img class="plot" src="{{chart}}" alt="Clima histórico mensual"><p class="source">{{output.source.product}} · {{output.source.start}} to {{output.source.end}} · {{output.source.time_standard}} · {{output.source.rows}} days · {{output.source.support}}</p>
+<p class="source" style="margin-top:4mm">{{output.limitations|join(' ')}}</p>
+</article><article class="report-page">
+<header>SkyField <small>Comparison and provenance</small></header>
+<h2>Comparison of three growing seasons</h2><img class="plot comparison" src="{{comparison}}" alt="Déficit y cobertura por alternativa">
+<table><thead><tr><th>Rotation</th><th>Score</th><th>Deficit (mm)</th><th>Coverage</th></tr></thead><tbody>
+{% for r in output.alternatives + ([output.reference] if output.reference else []) %}<tr class="{{'chosen' if r.id==selected.id else ''}}"><td>{% if r.id=='reference' %}Reference · {% endif %}{{r.names|join(' → ')}}</td><td>{{r.score}}</td><td>{{r.metrics.historical.deficit_mm if r.metrics.historical.deficit_mm is not none else 'Pending'}}</td><td>{{r.metrics.historical.cover_pct}} %</td></tr>{% endfor %}</tbody></table>
+{% if not output.reference %}<p class="source">The reference requires a previous crop compatible with the annual model and the chosen calendar.</p>{% endif %}
+<h3>Calendar of the chosen option</h3><p>{% for c in selected.calendar %}Growing season {{loop.index}} · {{c.crop}} (month {{c.month}}, {{c.duration}} days){{' / ' if not loop.last else ''}}{% endfor %}</p>
+<p>Three-year windows: {{selected.metrics.historical.windows|join(', ') if selected.metrics.historical.windows else 'pendientes'}}. Sensitivity: rain {{item.inputs.rainfall_shift_pct}} % and temperature {{item.inputs.warming_c}} °C.</p>
+<h3>Soil and data to be confirmed</h3><p>{{output.missing|join(', ') or 'Entries declared by the producer.'}}. {% if output.trial %}Trial assumptions have been enabled to complete missing critical entries.{% endif %}</p>
+{% if output.excluded %}<p>{% for crop,reasons in output.excluded.items() %}{{crop}}: {{reasons|join(' ')}} {% endfor %}</p>{% endif %}
+<ul>{% for a in output.actions %}<li><b>{{a.item}}.</b> {{a.reason}}</li>{% endfor %}</ul>
+<h3>Quality and origin</h3><p class="source">Nominal weights: water {{(100*output.weights[0])|round|int}} %, coverage {{(100*output.weights[1])|round|int}} %, diversity {{(100*output.weights[2])|round|int}} %. {% if selected.metrics.sensitivity.deficit_mm is not none %}Medium low sensitivity deficit: {{selected.metrics.sensitivity.deficit_mm}} mm.{% endif %}</p><p class="source">Analysis {{item.run_id}} · Version {{output.version}} · Catalog {{output.catalog_version}} · FAO 56. {{output.source.missing_days}} absent days and {{output.source.incomplete_days}} incomplete observations.<br>SHA-256 {{output.source.sha256}}</p>
+</article>
+{% if selected.recommendation %}
+<article class="report-page">
+<header>SkyField <small>Guidance for the producer</small></header>
+<h2>Recommendations based on analysis</h2>
+<div class="card"><h3>{{selected.recommendation.title}}</h3><p><b>{{selected.names|join(' → ')}}</b></p>
+<ul>{% for reason in selected.recommendation.reasons %}<li>{{reason}}</li>{% endfor %}</ul>
+<p>{{selected.recommendation.check}}</p><p class="source">Prácticas de salud del suelo · <a href="{{selected.recommendation.source}}">USDA NRCS</a>. Parámetros de cultivo · <a href="{{output.catalog_source}}">FAO 56</a>.</p></div>
+{% if output.regional_soil %}{% set soil=output.regional_soil %}
+<h3 style="margin-top:4mm">Estimated soil profile</h3>
+<p>{{soil.texture or 'Texture pending'}} (0–5 cm). sand {{soil.surface.sand if soil.surface.sand is not none else '—'}} %, silt {{soil.surface.silt if soil.surface.silt is not none else '—'}} %, clay {{soil.surface.clay if soil.surface.clay is not none else '—'}} %. pH {{soil.surface.phh2o if soil.surface.phh2o is not none else '—'}}{% if soil.ph_interval %} 90% interval {{soil.ph_interval|join('to')}}{% endif %}. organic carbon {{soil.surface.soc if soil.surface.soc is not none else '—'}} g/kg.</p>
+<p class="source"><a href="{{soil.url}}">{{soil.provider}}</a> · {{soil.resolution_m}} m · Consulted on {{soil.retrieved[:10]}}. {% if output.regional_retention %}The balance uses the estimated retention weighted by the reported usable depth.{% else %}The profile is attached for context. {% endif %} Contrast with laboratory sampling.</p>
+{% endif %}
+{% if output.moisture %}<h3 style="margin-top:4mm">Regional humidity</h3><p>The humidity anomaly compares full months with the historical median of the same month. The estimate represents the regional environment.</p><p class="source"><a href="{{output.moisture.url}}">{{output.moisture.source}}</a> · {{output.moisture.support}}.</p>{% endif %}
+<p class="note">The recommendation guides the comparison. Regional climate data, crop response and soil properties have uncertainty. Confirm the decision with the producer and a local professional.</p>
+</article>
+{% endif %}
+{% if output.environment %}
+<article class="report-page">
+<header>SkyField <small>Critical conditions and months</small></header>
+<h2>Integration of regional climate and humidity</h2><p>{{output.environment.alignment}} {{output.environment.method}}</p>
+<h3>Trend comparison</h3><table><thead><tr><th>Variable</th><th>Linear / decade</th><th>Theil–Sen / decade</th><th>Unit</th><th>Years</th></tr></thead><tbody>
+{% for t in output.environment.trends %}<tr><td>{{t.label}}</td><td>{{t.ols_decade}}</td><td>{{t.sen_decade}}</td><td>{{t.unit}}</td><td>{{t.start}}–{{t.end}}</td></tr>{% endfor %}</tbody></table>
+<p class="source">Linear regression of annual means or totals and median slopes between pairs (Theil–Sen). {{output.environment.uncertainty}}</p>
+{% for c in output.environment.correlations %}<p>{{c.label}} · Pearson {{c.r if c.r is not none else 'Pending'}} · {{c.n}} full months.</p>{% endfor %}
+{% if selected.timeline and selected.timeline.historical %}<h3>Months of highest simulated deficit</h3><p>First complete history window, alternative chosen. The rest of the windows are summarized in the historical range of the recommendations.</p>
+<table><thead><tr><th>Month</th><th>Deficit (mm)</th><th>Days with deficit</th><th>Days out of cultivation</th></tr></thead><tbody>
+{% for m in (selected.timeline.historical|sort(attribute='deficit_mm',reverse=True))[:6] %}<tr><td>{{m.month}}</td><td>{{m.deficit_mm}}</td><td>{{m.stress_days}}</td><td>{{m.fallow_days}}</td></tr>{% endfor %}</tbody></table>
+{% endif %}
+<h3>Local interpretation and validation</h3><p>Evapotranspiration represents soil evaporation and plant transpiration. ET₀ indicates reference atmospheric demand. The deficit compares demand and simulated consumption. Months with rainfall less than ET₀ guide the review of available water.</p>
+<p>MERRA-2 humidity is a relative regional estimate. The map provides satellite context for vegetation, rainfall, humidity, surface temperature, woody biomass and relief. Field measurements provide depth and ground conditions to contrast these results.</p>
+<p class="source">Climatic sources and methods · <a href="https://power.larc.nasa.gov/docs/methodology/data/sources/">NASA POWER</a> · <a href="https://power.larc.nasa.gov/docs/methodology/data/sources_hydrology/">NASA POWER MERRA-2</a> · <a href="https://www.fao.org/4/x0490e/x0490e00.htm">FAO 56</a>. Regional catalog · <a href="https://ice.santacruz.gob.bo/uploads/SANTA_CRUZ_ESTADISTICO_2024_a8a96110b3.pdf">ICE 2024, page 47, INE source</a>.</p>
+</article>
+{% endif %}
+{% if output.economics and selected.economics %}
+{% set economic=output.economics %}{% set budget=selected.economics %}
+<article class="report-page">
+<header>SkyField <small>Economic evaluation of the field</small></header>
+<h2>Budget for three annual growing seasons</h2><p><b>{{selected.names|join(' → ')}}</b> · values per hectare · constant prices.</p>
+<div class="kpis">{% for key,label in [('revenue_bob_ha','Gross income'),('cost_bob_ha','Total cost'),('net_bob_ha','Estimated profit')] %}<div class="card kpi">{{label}}<strong>{% if budget[key] is not none %}Bs {{'%.0f'|format(budget[key])}}{% else %}Pending{% endif %}</strong></div>{% endfor %}</div>
+<table><thead><tr><th>Growing season</th><th>Price Bs/t</th><th>Yield t/ha</th><th>Cost Bs/ha</th><th>Net profit Bs/ha</th></tr></thead><tbody>{% for row in budget.campaigns %}<tr><td>{{selected.names[loop.index0]}}</td>{% for key in ['price_bob_t','yield_t_ha','cost_bob_ha','net_bob_ha'] %}<td>{{'%.2f'|format(row[key]) if row[key] is not none else 'Pending'}}</td>{% endfor %}</tr>{% endfor %}</tbody></table>
+<h3>Breakeven yield and price</h3><table><thead><tr><th>Growing season</th><th>Balance Bs/t</th><th>Balance t/ha</th><th>Origin of price and yield</th></tr></thead><tbody>{% for row in budget.campaigns %}<tr><td>{{selected.names[loop.index0]}}</td><td>{{row.break_even_price if row.break_even_price is not none else 'Pending'}}</td><td>{{row.break_even_yield if row.break_even_yield is not none else 'Pending'}}</td><td>{{row.price_origin}}. {{row.yield_origin}}. {{row.cost_origin}}.</td></tr>{% endfor %}</tbody></table>
+{% if budget.net_bob_ha is not none %}<p>Equivalent net profit {{budget.net_usd_ha}} USD/ha. ROI {{budget.roi_pct if budget.roi_pct is not none else 'pending'}} %. Adverse scenario {{budget.downside_bob_ha}} Bs/ha with price and yield −20% each and cost +20%. {% if budget.net_field_bob is not none %}Net profit of the delimited area {{budget.net_field_bob}} Bs.{% endif %}</p>{% endif %}
+<h3>Comparison of the alternatives shown</h3><table><thead><tr><th>Rotation</th><th>Agronomic points</th><th>Income Bs/ha</th><th>Net profit Bs/ha</th></tr></thead><tbody>{% for r in output.alternatives %}<tr><td>{{r.names|join(' → ')}}</td><td>{{r.score}}</td><td>{{r.economics.revenue_bob_ha if r.economics.revenue_bob_ha is not none else 'Pending'}}</td><td>{{r.economics.net_bob_ha if r.economics.net_bob_ha is not none else 'Pending'}}</td></tr>{% endfor %}</tbody></table>
+<p class="source">{{economic.method}} {{economic.uncertainty}}</p><p class="source">Exchange rate used {{economic.settings.bob_per_usd or economic.market.fx.bob_per_usd}} Bs/USD. BCB Reference {{economic.market.fx.date}}, valid until {{economic.market.fx.valid_until}}. Wholesale discount to farm {{economic.settings.farmgate_discount_pct or 0}} %. Verified Market {{economic.market.verified}}.</p>
+<p class="source">{% for source in economic.market.sources.values() %}<a href="{{source.url}}">{{source.name}}</a> ({{source.date}}). {% endfor %}<a href="{{economic.market.fx.url}}">Banco Central de Bolivia</a>.</p>
+</article>
+{% endif %}
+{% if output.enso and output.enso.status=='available' %}
+<article class="report-page">
+<header>SkyField <small>Climate change and ENSO sensitivity</small></header>
+<h2>Impact on the water balance</h2><p>Exploratory contrast of very strong conditions with RONI +2 and −2 °C, associated with Pacific Niño 3.4. Local response adjusted with NASA POWER and NOAA, {{output.enso.start}}–{{output.enso.end}}.</p>
+<table><thead><tr><th>Scenario</th><th>Deficit mm</th><th>Deficit change</th><th>Days with deficit</th><th>Days ≥35 °C</th></tr></thead><tbody>{% for key,label in [('historical','Historical'),('sensitivity','Custom climate scenario'),('elnino','Very strong El Niño'),('lanina','Very strong La Niña')] %}{% if selected.metrics[key] is defined %}{% set m=selected.metrics[key] %}{% set base=selected.metrics.historical.deficit_mm %}<tr><td>{{label}}</td><td>{{m.deficit_mm if m.deficit_mm is not none else 'Pending'}}</td><td>{% if base is not none and base>0 and m.deficit_mm is not none %}{{'%.1f'|format(100*(m.deficit_mm-base)/base)}} %{% else %}Consult absolute difference{% endif %}</td><td>{{m.stress_days}}</td><td>{{m.hot_days}}</td></tr>{% endif %}{% endfor %}</tbody></table>
+<p>An increase in deficit indicates more demand for unmet water in the simulated soil. Contrast crops with lower demand, crop residue and calendar. Greater rainfall requires reviewing drainage and timing of work with local observations.</p>
+<h3>Monthly response associated with ENSO</h3><table><thead><tr><th>Month</th><th>Rain Child (%)</th><th>Child temp. (°C)</th><th>Rain girl (%)</th><th>Girl temp. (°C)</th><th>Years</th></tr></thead><tbody>{% for month in output.enso.months %}<tr><td>{{month.month}}</td><td>{{month.elnino.rain_pct}}</td><td>{{month.elnino.temp_c}}</td><td>{{month.lanina.rain_pct}}</td><td>{{month.lanina.temp_c}}</td><td>{{month.n}}</td></tr>{% endfor %}</tbody></table>
+<h3>Method and uncertainty</h3><p>{{output.enso.method}}</p><p>Approximate 95% intervals use Newey-West HAC with 3 annual lags. The validation section presents retrospective errors, limitations and conditions of interpretation.</p><p>{{output.enso.climate_change}}</p><p class="source"><a href="{{output.enso.source_url}}">NASA POWER mensual</a>. <a href="{{output.enso.index_url}}">NOAA CPC RONI</a>. The web view preserves the intervals by month and the extrapolation mark.</p>
+</article>
+{% endif %}
+{% if output.weather %}{% set weather=output.weather %}
+<article class="report-page">
+<header>SkyField <small>Forecasting and cycle planning</small></header>
+<h2>Seven-day forecast</h2><p>Consultation {{weather.retrieved[:19]|replace('T',' ')}} UTC. Point {{weather.point|join(', ')}}.</p>
+{% if weather.days %}<table><thead><tr><th>Date</th><th>Minimum °C</th><th>Maximum °C</th><th>Rain mm</th><th>Rain probability %</th><th>ET₀ mm</th></tr></thead><tbody>{% for d in weather.days %}<tr><td>{{d.date}}</td><td>{{d.temperature_2m_min}}</td><td>{{d.temperature_2m_max}}</td><td>{{d.precipitation_sum}}</td><td>{{d.precipitation_probability_max}}</td><td>{{d.et0_fao_evapotranspiration}}</td></tr>{% endfor %}</tbody></table>{% else %}<p>The daily source did not provide data in this query.</p>{% endif %}
+{% if weather.month and weather.month.rain_mm %}<h3>Upcoming {{weather.month.days}} days</h3><p>Rain P10 / P50 / P90 {{weather.month.rain_mm|join(' / ')}} mm. Average temperature P10 / P50 / P90 {{weather.month.temp_c|join(' / ')}} °C. {{weather.month.members}} members. Interval {{weather.month.start}} to {{weather.month.end}}.</p>{% endif %}
+{% if weather.seasonal %}<h3>Seasonal perspective of the set</h3><table><thead><tr><th>Month</th><th>Days covered</th><th>Rain P10 / P50 / P90 (mm)</th><th>Temp. P10 / P50 / P90 (°C)</th></tr></thead><tbody>{% for m in weather.seasonal %}<tr><td>{{m.month}}</td><td>{{m.days}}</td><td>{{m.rain_mm|join(' / ') if m.rain_mm else 'No data'}}</td><td>{{m.temp_c|join(' / ') if m.temp_c else 'No data'}}</td></tr>{% endfor %}</tbody></table>{% endif %}
+<p>{{weather.method}}</p><p>{{weather.interpretation}}</p><p>Bars and percentiles allow us to recognize uncertainty and prepare options. Check humidity, local alerts, wind and crop status as work approaches.</p><p class="source"><a href="{{weather.source_url}}">Open-Meteo, pronóstico</a>. <a href="{{weather.seasonal_url}}">Open-Meteo, perspectiva estacional</a>. <a href="https://senamhi.gob.bo/">SENAMHI Bolivia</a>.</p>
+</article>
+{% endif %}
+{% if output.quality %}
+<article class="report-page">
+<header>SkyField <small>Data quality and reliability</small></header>
+<h2>Input integrity {{output.quality.score}} / 100</h2>
+<p>{{output.quality.level}} · {{output.quality.assessed_on}}</p><p>{{output.quality.interpretation}}</p>
+<p class="note"><b>{{output.quality.validation}}</b></p>
+<table><thead><tr><th>Component</th><th>Points</th><th>Evidence</th></tr></thead><tbody>
+{% for c in output.quality.components %}<tr><td>{{c.label}}</td><td>{{c.points}} / {{c.maximum}}</td><td>{{c.detail}}</td></tr>{% endfor %}
+</tbody></table><h3>Verifications for field decision</h3><ul>{% for warning in output.quality.warnings %}<li>{{warning}}</li>{% endfor %}</ul>
+<p>Design weights to check integrity and availability. Each component identifies the data used and the outstanding assumptions.</p>
+<p>The producer confirm soil sampling, variety, work opportunity, buyer's offer and complete costs with his agronomic team.</p>
+</article>
+{% endif %}
+{% if output.enso and output.enso.months and output.enso.months[0].validation is defined %}
+<article class="report-page">
+<header>SkyField <small>Retrospective validation of the ENSO association</small></header>
+<h2>Error outside of training sample</h2>
+<p>Increasing training since 20 years and evaluation in the following year with observed RONI. The reference uses only the time trend. A positive skill value indicates lower squared error. Negative skill calls for caution when interpreting ENSO.</p>
+<table><thead><tr><th>Month</th><th>Years</th><th>RMSE rain mm</th><th>Rain Skill %</th><th>RMSE temp. °C</th><th>Temp Skill %</th></tr></thead><tbody>
+{% for m in output.enso.months %}<tr><td>{{m.month}}</td><td>{{m.validation.rain.n}}</td><td>{{'%.1f'|format(m.validation.rain.rmse)}}</td><td>{{'%.1f'|format(m.validation.rain.skill_pct) if m.validation.rain.skill_pct is not none else 'Pending'}}</td><td>{{'%.2f'|format(m.validation.temperature.rmse)}}</td><td>{{'%.1f'|format(m.validation.temperature.skill_pct) if m.validation.temperature.skill_pct is not none else 'Pending'}}</td></tr>{% endfor %}
+</tbody></table>
+<p>RMSE is the root mean square error. The skill compares the squared error with the time reference. Values ​​are calculated by month and retain the original units.</p>
+<p>{{output.enso.uncertainty}}</p><p>This check evaluates a historical association with the observed index. Future operation also requires ENSO forecasts and local validation of the crop.</p>
+</article>
+{% endif %}
+</body></html>

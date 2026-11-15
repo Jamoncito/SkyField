@@ -1,73 +1,474 @@
-import type { MultiPolygon, Point, Polygon } from 'geojson';
+import type { MultiPolygon, Point, Polygon } from "geojson";
 
 export type Shape = Point | Polygon | MultiPolygon;
-export type Site = {id:string; name:string; geometry:Shape; lon:number; lat:number; area_ha:number|null;
-  version:number; pilot:boolean; source:string; multicell:boolean; updated:string};
-export type User = {id:string; name:string; email:string; csrf:string; guide_seen:boolean};
-export type Status = 'queued'|'running'|'done'|'failed'|'cancelled';
-export type Task = {job_id:string; target_id:string; status:Status};
-export type Job = {id:string; target:string; kind:string; status:Status; progress:number; error:string|null};
-export type RunSummary = {id:string; field_id:string; field_name:string; created:string; status:Status; job_id:string};
-export type Report = {id:string; run_id:string; rotation_id:string; field_name:string; created:string; ready:boolean; status:Status; job_id:string};
-export type ImportRecord = {id:string; kind:string; created:string; status:Status; error:string|null; job_id:string;
-  summary:{rows:number;sha256?:string;missing_days?:number;incomplete_days?:number}|null};
-export type Climate = {product:string; source_class:string; source_url:string|null; support:string; point:number[];
-  start:string; end:string; rows:number; incomplete_days:number; missing_days:number; time_standard:string;
-  sha256:string; mean_temp_c:number|null; mean_annual_rain_mm:number|null; elevation_m:number|null; recorded:string};
-export type Metrics = {deficit_mm:number|null; stress_days:number|null; cover_pct:number|null; irrigation_mm:number|null;
-  windows:number[]; lowest_deficit_windows?:number; deficit_range:[number,number]|null;
-  frost_days?:number|null; hot_days?:number|null; fallow_days?:number|null};
-export type RegionalSoil={provider:string;url:string;resolution_m:number;retrieved:string;texture:string|null;
-  ph_interval:[number,number]|null;surface:Record<'sand'|'silt'|'clay'|'phh2o'|'soc',number|null>;
-  retention:{from_cm:number;to_cm:number;fc:number|null;wp:number|null}[]};
-export type Crop={code:string;name:string;family:string;months:number[];simulated:boolean;
-  production_kt:number|null;production_source:string;production_period:string;note:string;
-  system?:string;scientific?:string;source?:string};
-export type TimelineMonth={month:string;deficit_mm:number;stress_days:number;fallow_days:number;rain_mm:number;demand_mm:number;actual_mm:number;irrigation_mm:number};
-export type Scenario='historical'|'sensitivity'|'elnino'|'lanina';
-export type Option = {id:string; names:string[]; crops?:string[]; families:string[]; score:number; diversity:number;
-  agronomic_top?:boolean;economic_top?:boolean;economics?:RotationBudget;
-  metrics:{historical:Metrics; sensitivity:Metrics;elnino?:Metrics;lanina?:Metrics}; calendar:{crop:string; month:number; duration:number}[];
-  recommendation?:{title:string;reasons:string[];source:string;check:string};
-  timeline?:Partial<Record<Scenario,TimelineMonth[]>>};
-export type Environment={monthly:{month:string;rain_mm:number|null;temp_c:number|null;et0_mm:number|null;balance_mm:number|null;wetness:number|null;anomaly:number|null;phase:string}[];
-  trends:{label:string;unit:string;n:number;start:number;end:number;ols_decade:number;sen_decade:number;r2:number}[];
-  correlations:{label:string;n:number;r:number|null}[];alignment:string;support:string;method:string;uncertainty:string};
-export type Result = {version:string; catalog_version:string; catalog_source:string; status:string; trial:boolean;
-  source:Climate; candidate_count:number; alternatives:Option[]; reference:Option|null; excluded:Record<string,string[]>;
-  missing:string[]; weights:number[]; monthly:{month:number;rain:number|null;temp:number|null;rain_years:number;temp_years:number}[];
-  limitations:string[]; actions:{item:string;reason:string}[];
-  regional_soil?:RegionalSoil|null; regional_retention?:boolean; assumed?:string[];
-  environment?:Environment;
-  economics?:EconomicSummary;enso?:ClimateContext;weather?:Weather;
-  climate_indicators?:{year:number;rain_mm:number;et0_mm:number|null;balance_mm:number|null;temp_c:number;frost_days:number;hot_days:number}[];
-  moisture?:{source:string;url:string;support:string;monthly:{month:string;wetness:number;anomaly:number}[]}|null;
-  soil:{sample_code:string;sampled_on:string;depth_from_cm:number;depth_to_cm:number;variable:string;value:string;unit:string;method:string}[];
-  campaigns:{crop_code:string;cultivar:string;planting_date:string;harvest_date:string}[]};
-export type Run = {id:string; created:string; field:Site; inputs:{previous?:string;soil_ph?:number;priority:string; rainfall_shift_pct:number; warming_c:number;economics?:EconomicSettings}; result:Result|null};
+export type Site = {
+  id: string;
+  name: string;
+  geometry: Shape;
+  lon: number;
+  lat: number;
+  area_ha: number | null;
+  version: number;
+  pilot: boolean;
+  source: string;
+  multicell: boolean;
+  updated: string;
+};
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  csrf: string;
+  guide_seen: boolean;
+};
+export type Status = "queued" | "running" | "done" | "failed" | "cancelled";
+export type Task = { job_id: string; target_id: string; status: Status };
+export type Job = {
+  id: string;
+  target: string;
+  kind: string;
+  status: Status;
+  progress: number;
+  error: string | null;
+};
+export type RunSummary = {
+  id: string;
+  field_id: string;
+  field_name: string;
+  created: string;
+  status: Status;
+  job_id: string;
+};
+export type Report = {
+  id: string;
+  run_id: string;
+  rotation_id: string;
+  field_name: string;
+  created: string;
+  ready: boolean;
+  status: Status;
+  job_id: string;
+  language?: "en" | "es";
+};
+export type ImportRecord = {
+  id: string;
+  kind: string;
+  created: string;
+  status: Status;
+  error: string | null;
+  job_id: string;
+  summary: {
+    rows: number;
+    sha256?: string;
+    missing_days?: number;
+    incomplete_days?: number;
+  } | null;
+};
+export type Climate = {
+  product: string;
+  source_class: string;
+  source_url: string | null;
+  support: string;
+  point: number[];
+  start: string;
+  end: string;
+  rows: number;
+  incomplete_days: number;
+  missing_days: number;
+  time_standard: string;
+  sha256: string;
+  mean_temp_c: number | null;
+  mean_annual_rain_mm: number | null;
+  elevation_m: number | null;
+  recorded: string;
+};
+export type Metrics = {
+  deficit_mm: number | null;
+  stress_days: number | null;
+  cover_pct: number | null;
+  irrigation_mm: number | null;
+  windows: number[];
+  lowest_deficit_windows?: number;
+  deficit_range: [number, number] | null;
+  frost_days?: number | null;
+  hot_days?: number | null;
+  fallow_days?: number | null;
+};
+export type RegionalSoil = {
+  provider: string;
+  url: string;
+  resolution_m: number;
+  retrieved: string;
+  texture: string | null;
+  ph_interval: [number, number] | null;
+  surface: Record<"sand" | "silt" | "clay" | "phh2o" | "soc", number | null>;
+  retention: {
+    from_cm: number;
+    to_cm: number;
+    fc: number | null;
+    wp: number | null;
+  }[];
+};
+export type Crop = {
+  code: string;
+  name: string;
+  family: string;
+  months: number[];
+  simulated: boolean;
+  production_kt: number | null;
+  production_source: string;
+  production_period: string;
+  note: string;
+  system?: string;
+  scientific?: string;
+  source?: string;
+};
+export type TimelineMonth = {
+  month: string;
+  deficit_mm: number;
+  stress_days: number;
+  fallow_days: number;
+  rain_mm: number;
+  demand_mm: number;
+  actual_mm: number;
+  irrigation_mm: number;
+};
+export type Scenario = "historical" | "sensitivity" | "elnino" | "lanina";
+export type Option = {
+  id: string;
+  names: string[];
+  crops?: string[];
+  families: string[];
+  score: number;
+  diversity: number;
+  agronomic_top?: boolean;
+  economic_top?: boolean;
+  economics?: RotationBudget;
+  metrics: {
+    historical: Metrics;
+    sensitivity: Metrics;
+    elnino?: Metrics;
+    lanina?: Metrics;
+  };
+  calendar: { crop: string; month: number; duration: number }[];
+  recommendation?: {
+    title: string;
+    reasons: string[];
+    source: string;
+    check: string;
+  };
+  timeline?: Partial<Record<Scenario, TimelineMonth[]>>;
+};
+export type Environment = {
+  monthly: {
+    month: string;
+    rain_mm: number | null;
+    temp_c: number | null;
+    et0_mm: number | null;
+    balance_mm: number | null;
+    wetness: number | null;
+    anomaly: number | null;
+    phase: string;
+  }[];
+  trends: {
+    label: string;
+    unit: string;
+    n: number;
+    start: number;
+    end: number;
+    ols_decade: number;
+    sen_decade: number;
+    r2: number;
+  }[];
+  correlations: { label: string; n: number; r: number | null }[];
+  alignment: string;
+  support: string;
+  method: string;
+  uncertainty: string;
+};
+export type Result = {
+  version: string;
+  catalog_version: string;
+  catalog_source: string;
+  status: string;
+  trial: boolean;
+  quality?: {
+    version: string;
+    score: number;
+    maximum: number;
+    assessed_on: string;
+    level: string;
+    validation: string;
+    interpretation: string;
+    point: [number, number];
+    components: {
+      key: string;
+      label: string;
+      points: number;
+      maximum: number;
+      detail: string;
+    }[];
+    warnings: string[];
+  };
+  source: Climate;
+  candidate_count: number;
+  alternatives: Option[];
+  reference: Option | null;
+  excluded: Record<string, string[]>;
+  missing: string[];
+  weights: number[];
+  monthly: {
+    month: number;
+    rain: number | null;
+    temp: number | null;
+    rain_years: number;
+    temp_years: number;
+  }[];
+  limitations: string[];
+  actions: { item: string; reason: string }[];
+  regional_soil?: RegionalSoil | null;
+  regional_retention?: boolean;
+  assumed?: string[];
+  environment?: Environment;
+  economics?: EconomicSummary;
+  enso?: ClimateContext;
+  weather?: Weather;
+  climate_indicators?: {
+    year: number;
+    rain_mm: number;
+    et0_mm: number | null;
+    balance_mm: number | null;
+    temp_c: number;
+    frost_days: number;
+    hot_days: number;
+  }[];
+  moisture?: {
+    source: string;
+    url: string;
+    support: string;
+    monthly: { month: string; wetness: number; anomaly: number }[];
+  } | null;
+  soil: {
+    sample_code: string;
+    sampled_on: string;
+    depth_from_cm: number;
+    depth_to_cm: number;
+    variable: string;
+    value: string;
+    unit: string;
+    method: string;
+  }[];
+  campaigns: {
+    crop_code: string;
+    cultivar: string;
+    planting_date: string;
+    harvest_date: string;
+  }[];
+};
+export type Run = {
+  id: string;
+  created: string;
+  field: Site;
+  inputs: {
+    previous?: string;
+    soil_ph?: number;
+    priority: string;
+    rainfall_shift_pct: number;
+    warming_c: number;
+    economics?: EconomicSettings;
+  };
+  result: Result | null;
+};
 
-export type CropBudget={sale_bob_t?:number|null;yield_t_ha?:number|null;cost_bob_ha?:number|null};
-export type EconomicSettings={yield_year?:number;farmgate_discount_pct?:number;bob_per_usd?:number|null;budgets?:Record<string,CropBudget>};
-export type BudgetCampaign={crop:string;month:number;price_bob_t:number|null;yield_t_ha:number|null;cost_bob_ha:number|null;
-  revenue_bob_ha:number|null;net_bob_ha:number|null;break_even_price:number|null;break_even_yield:number|null;
-  price_origin:string;yield_origin:string;cost_origin:string};
-export type RotationBudget={campaigns:BudgetCampaign[];revenue_bob_ha:number|null;cost_bob_ha:number|null;net_bob_ha:number|null;
-  net_usd_ha:number|null;net_field_bob:number|null;roi_pct:number|null;downside_bob_ha:number|null;missing:unknown[]};
-export type AgriculturalCampaign={crop:string;name:string;season:'summer'|'winter';area_ha:number[];yield_t_ha:number[];production_t:number[];page:number};
-export type Market={version:string;verified:string;sha256:string;fx:{bob_per_usd:number;date:string;valid_until:string;provider:string;url:string};
-  comparisons?:{product:string;national_date:string;national_usd_t:number;reference:string;reference_date:string;reference_usd_t:number;difference_usd_t:number;difference_pct:number}[];
-  national:{crop:string;product:string;bob_t:number;usd_t:number;value:number;currency:string;unit:string;kg_per_unit:number;date:string;market:string;source:string;page:number}[];
-  international:{crop:string;product:string;usd_t:number;date:string;market:string;source:string;comparable:boolean}[];
-  sources:Record<string,{name:string;url:string;date:string}>;unit_note:string;market_note:string;paraguay_note:string;
-  agriculture:{provider:string;url:string;document:string;title:string;published:string;years:number[];campaigns:AgriculturalCampaign[];note:string}};
-export type EconomicSummary={settings:EconomicSettings;market:Market;ranked_ids:string[];revenue_ranked_ids:string[];evaluated:number;method:string;uncertainty:string};
-export type ENSOMonth={rain_pct:number;temp_c:number;rain_ci:[number,number];extrapolated:boolean;n:number;clipped:boolean};
-export type ClimateContext={status:'available'|'unavailable';reason?:string;start:number;end:number;
-  months:{month:number;rain_mm:number;temp_c:number;rain_range:[number,number];n:number;elnino:ENSOMonth;lanina:ENSOMonth;warming_decade_c:number}[];
-  source:string;source_url:string;index_url:string;method:string;uncertainty:string;climate_change:string};
-export type EnsemblePeriod={rain_mm:[number,number,number]|null;temp_c:[number,number,number]|null;members:number;days:number};
-export type Weather={retrieved:string;point:[number,number];days:{date:string;temperature_2m_max:number|null;temperature_2m_min:number|null;temperature_2m_mean:number|null;
-  precipitation_sum:number|null;precipitation_probability_max:number|null;et0_fao_evapotranspiration:number|null;wind_speed_10m_max:number|null}[];
-  month:(EnsemblePeriod&{start:string;end:string})|null;seasonal:(EnsemblePeriod&{month:string})[];
-  hourly:{time:string[];relative_humidity_2m:(number|null)[];dew_point_2m:(number|null)[]}|null;
-  source_url:string;seasonal_url:string;short_status:string;seasonal_status:string;method:string;interpretation:string};
+export type CropBudget = {
+  sale_bob_t?: number | null;
+  yield_t_ha?: number | null;
+  cost_bob_ha?: number | null;
+};
+export type EconomicSettings = {
+  yield_year?: number;
+  farmgate_discount_pct?: number;
+  bob_per_usd?: number | null;
+  budgets?: Record<string, CropBudget>;
+};
+export type BudgetCampaign = {
+  crop: string;
+  month: number;
+  price_bob_t: number | null;
+  yield_t_ha: number | null;
+  cost_bob_ha: number | null;
+  revenue_bob_ha: number | null;
+  net_bob_ha: number | null;
+  break_even_price: number | null;
+  break_even_yield: number | null;
+  price_origin: string;
+  yield_origin: string;
+  cost_origin: string;
+};
+export type RotationBudget = {
+  campaigns: BudgetCampaign[];
+  revenue_bob_ha: number | null;
+  cost_bob_ha: number | null;
+  net_bob_ha: number | null;
+  net_usd_ha: number | null;
+  net_field_bob: number | null;
+  roi_pct: number | null;
+  downside_bob_ha: number | null;
+  missing: unknown[];
+};
+export type AgriculturalCampaign = {
+  crop: string;
+  name: string;
+  season: "summer" | "winter";
+  area_ha: number[];
+  yield_t_ha: number[];
+  production_t: number[];
+  page: number;
+};
+export type Market = {
+  version: string;
+  verified: string;
+  sha256: string;
+  fx: {
+    bob_per_usd: number;
+    date: string;
+    valid_until: string;
+    provider: string;
+    url: string;
+  };
+  comparisons?: {
+    product: string;
+    national_date: string;
+    national_usd_t: number;
+    reference: string;
+    reference_date: string;
+    reference_usd_t: number;
+    difference_usd_t: number;
+    difference_pct: number;
+  }[];
+  national: {
+    crop: string;
+    product: string;
+    bob_t: number;
+    usd_t: number;
+    value: number;
+    currency: string;
+    unit: string;
+    kg_per_unit: number;
+    date: string;
+    market: string;
+    source: string;
+    page: number;
+  }[];
+  international: {
+    crop: string;
+    product: string;
+    usd_t: number;
+    date: string;
+    market: string;
+    source: string;
+    comparable: boolean;
+  }[];
+  sources: Record<string, { name: string; url: string; date: string }>;
+  unit_note: string;
+  market_note: string;
+  paraguay_note: string;
+  agriculture: {
+    provider: string;
+    url: string;
+    document: string;
+    title: string;
+    published: string;
+    years: number[];
+    campaigns: AgriculturalCampaign[];
+    note: string;
+  };
+};
+export type EconomicSummary = {
+  settings: EconomicSettings;
+  market: Market;
+  ranked_ids: string[];
+  revenue_ranked_ids: string[];
+  evaluated: number;
+  method: string;
+  uncertainty: string;
+};
+export type ENSOMonth = {
+  rain_pct: number;
+  temp_c: number;
+  rain_ci: [number, number];
+  extrapolated: boolean;
+  n: number;
+  clipped: boolean;
+};
+export type ClimateContext = {
+  status: "available" | "unavailable";
+  reason?: string;
+  start: number;
+  end: number;
+  months: {
+    month: number;
+    rain_mm: number;
+    temp_c: number;
+    rain_range: [number, number];
+    n: number;
+    elnino: ENSOMonth;
+    lanina: ENSOMonth;
+    warming_decade_c: number;
+    validation?: {
+      rain: {
+        n: number;
+        mae: number | null;
+        rmse: number | null;
+        reference_rmse: number | null;
+        skill_pct: number | null;
+      };
+      temperature: {
+        n: number;
+        mae: number | null;
+        rmse: number | null;
+        reference_rmse: number | null;
+        skill_pct: number | null;
+      };
+    };
+  }[];
+  source: string;
+  source_url: string;
+  index_url: string;
+  method: string;
+  uncertainty: string;
+  climate_change: string;
+};
+export type EnsemblePeriod = {
+  rain_mm: [number, number, number] | null;
+  temp_c: [number, number, number] | null;
+  members: number;
+  days: number;
+};
+export type Weather = {
+  retrieved: string;
+  point: [number, number];
+  days: {
+    date: string;
+    temperature_2m_max: number | null;
+    temperature_2m_min: number | null;
+    temperature_2m_mean: number | null;
+    precipitation_sum: number | null;
+    precipitation_probability_max: number | null;
+    et0_fao_evapotranspiration: number | null;
+    wind_speed_10m_max: number | null;
+  }[];
+  month: (EnsemblePeriod & { start: string; end: string }) | null;
+  seasonal: (EnsemblePeriod & { month: string })[];
+  hourly: {
+    time: string[];
+    relative_humidity_2m: (number | null)[];
+    dew_point_2m: (number | null)[];
+  } | null;
+  source_url: string;
+  seasonal_url: string;
+  short_status: string;
+  seasonal_status: string;
+  method: string;
+  interpretation: string;
+};

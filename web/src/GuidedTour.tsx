@@ -1,7 +1,7 @@
+import { tr } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import type { Go } from "./App";
-
 type Step = {
   title: string;
   text: string;
@@ -9,12 +9,16 @@ type Step = {
   target: string;
   check?: () => string | null;
 };
-type Box = { top: number; left: number; width: number; height: number };
+type Box = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
 const value = (name: string) =>
   document.querySelector<HTMLInputElement | HTMLSelectElement>(
     `[name="${name}"]`,
   )?.value ?? "";
-
 export function GuidedTour({
   pilot,
   navigate,
@@ -38,189 +42,247 @@ export function GuidedTour({
     results = run ? "/comparar/" + run : "/comparar";
   const steps: Step[] = [
     {
-      title: "Bienvenido a SkyField",
-      text: "Vamos a crear tu primer lote y preparar una comparación. Podrás escribir y usar cada opción iluminada. Pulsa Siguiente cuando termines cada paso o Saltar para explorar por tu cuenta.",
+      title: tr("Bienvenido a SkyField"),
+      text: tr(
+        "Vamos a crear tu primer lote y preparar una comparación. Podrás escribir y usar cada opción iluminada. Pulsa Siguiente cuando termines cada paso o Saltar para explorar por tu cuenta.",
+      ),
       path: "/",
       target: "dashboard",
     },
     {
-      title: "Dale un nombre a tu terreno",
-      text: "Escribe al menos dos caracteres. Puedes usar un nombre que reconozcas, como Lote norte o Mi piloto. Después pulsa Siguiente.",
+      title: tr("Dale un nombre a tu terreno"),
+      text: tr(
+        "Escribe al menos dos caracteres. Puedes usar un nombre que reconozcas, como Lote norte o Mi piloto. Después pulsa Siguiente.",
+      ),
       path: lot,
       target: "field-name",
       check: () =>
         value("field_name").trim().length >= 2
           ? null
-          : "Escribe un nombre de al menos dos caracteres para continuar.",
+          : tr("Escribe un nombre de al menos dos caracteres para continuar."),
     },
     {
-      title: "Ubica tu primer lote",
-      text: "Busca un lugar y confirma el punto, dibuja un perímetro o pulsa Usar punto piloto de Santa Cruz para practicar con un histórico verificado. Elige una ubicación antes de seguir.",
+      title: tr("Ubica tu primer lote"),
+      text: tr(
+        "Busca un lugar y confirma el punto, dibuja un perímetro o pulsa Usar punto piloto de Santa Cruz para practicar con un histórico verificado. Elige una ubicación antes de seguir.",
+      ),
       path: lot,
       target: "location",
       check: () =>
         document.querySelector('[data-geometry-ready="true"]')
           ? null
-          : "Selecciona un punto, termina el perímetro o utiliza el punto piloto.",
+          : tr(
+              "Selecciona un punto, termina el perímetro o utiliza el punto piloto.",
+            ),
     },
     {
-      title: "Guarda tu primer lote",
-      text: "Comprueba el nombre y la ubicación y pulsa Guardar en la ficha. Al guardarse, se habilitará Siguiente. Tu terreno queda asociado a tu cuenta.",
+      title: tr("Guarda tu primer lote"),
+      text: tr(
+        "Comprueba el nombre y la ubicación y pulsa Guardar en la ficha. Al guardarse, se habilitará Siguiente. Tu terreno queda asociado a tu cuenta.",
+      ),
       path: lot,
       target: "save-field",
       check: () =>
         pilot && document.querySelector('[data-saved="true"]')
           ? null
-          : "Pulsa Guardar y espera la confirmación del lote.",
+          : tr("Pulsa Guardar y espera la confirmación del lote."),
     },
     {
-      title: "Busca provincias y municipios",
-      text: "El buscador enfoca el mapa al escribir una provincia, municipio o departamento. Confirmar punto cambia la ubicación del terreno y permite guardar una nueva versión.",
+      title: tr("Busca provincias y municipios"),
+      text: tr(
+        "El buscador enfoca el mapa al escribir una provincia, municipio o departamento. Confirmar punto cambia la ubicación del terreno y permite guardar una nueva versión.",
+      ),
       path: lot,
       target: "map-search",
     },
     {
-      title: "También puedes ingresar coordenadas",
-      text: "Abre Coordenadas para escribir latitud y longitud decimales. Usa Ubicar y confirma el punto. Los valores de Santa Cruz suelen ser negativos en ambos campos.",
+      title: tr("También puedes ingresar coordenadas"),
+      text: tr(
+        "Abre Coordenadas para escribir latitud y longitud decimales. Usa Ubicar y confirma el punto. Los valores de Santa Cruz suelen ser negativos en ambos campos.",
+      ),
       path: lot,
       target: "coordinates",
     },
     {
-      title: "Dibuja o utiliza el GPS",
-      text: "Puedes marcar los límites del terreno o solicitar tu posición. Verifica la precisión del dispositivo y guarda los cambios antes de analizar.",
+      title: tr("Dibuja o utiliza el GPS"),
+      text: tr(
+        "Puedes marcar los límites del terreno o solicitar tu posición. Verifica la precisión del dispositivo y guarda los cambios antes de analizar.",
+      ),
       path: lot,
       target: "map-tools",
     },
     {
-      title: "Mira el entorno desde NASA",
-      text: "Selecciona una capa y su fecha. NDVI, temperatura superficial, lluvia, humedad y biomasa tienen escalas distintas. La leyenda indica qué representa cada color.",
+      title: tr("Mira el entorno desde NASA"),
+      text: tr(
+        "Selecciona una capa y su fecha. NDVI, temperatura superficial, lluvia, humedad y biomasa tienen escalas distintas. La leyenda indica qué representa cada color.",
+      ),
       path: lot,
       target: "nasa",
     },
     {
-      title: "Lleva Santa Cruz sin conexión",
-      text: "Descarga el mapa regional mientras tienes internet. El enlace sin conexión conserva las provincias y referencias municipales en este navegador y dispositivo.",
+      title: tr("Lleva Santa Cruz sin conexión"),
+      text: tr(
+        "Descarga el mapa regional mientras tienes internet. El enlace sin conexión conserva las provincias y referencias municipales en este navegador y dispositivo.",
+      ),
       path: lot,
       target: "offline",
     },
     {
-      title: "Consulta el perfil de suelo",
-      text: "Consultar suelo obtiene una estimación regional de textura, pH, carbono y retención. Compara estas predicciones con muestreos y experiencia local.",
+      title: tr("Consulta el perfil de suelo"),
+      text: tr(
+        "Consultar suelo obtiene una estimación regional de textura, pH, carbono y retención. Compara estas predicciones con muestreos y experiencia local.",
+      ),
       path: lot,
       target: "soil",
     },
     {
-      title: "Planifica con el tiempo cercano",
-      text: "Consulta siete días, una perspectiva de treinta días y el conjunto estacional. Cada gráfica explica sus unidades, dispersión y decisiones que puedes revisar.",
+      title: tr("Planifica con el tiempo cercano"),
+      text: tr(
+        "Consulta siete días, una perspectiva de treinta días y el conjunto estacional. Cada gráfica explica sus unidades, dispersión y decisiones que puedes revisar.",
+      ),
       path: lot,
       target: "weather",
     },
     {
-      title: "Añade tus propios datos",
-      text: "Las plantillas permiten importar clima, análisis de suelo y campañas. La aplicación valida las filas y conserva su procedencia para cada cálculo.",
+      title: tr("Añade tus propios datos"),
+      text: tr(
+        "Las plantillas permiten importar clima, análisis de suelo y campañas. La aplicación valida las filas y conserva su procedencia para cada cálculo.",
+      ),
       path: lot,
       target: "imports",
     },
     {
-      title: "Declara el manejo del terreno",
-      text: "Selecciona el cultivo anterior y la disponibilidad de riego. Puedes elegir No lo sé de forma explícita cuando necesites completar la información después.",
+      title: tr("Declara el manejo del terreno"),
+      text: tr(
+        "Selecciona el cultivo anterior y la disponibilidad de riego. Puedes elegir No lo sé de forma explícita cuando necesites completar la información después.",
+      ),
       path: analysis,
       target: "management",
       check: () =>
         value("previous") && value("irrigation")
           ? null
-          : "Selecciona el cultivo anterior y la disponibilidad de riego.",
+          : tr("Selecciona el cultivo anterior y la disponibilidad de riego."),
     },
     {
-      title: "Elige tu prioridad",
-      text: "La prioridad cambia el peso del agua, la cobertura y la diversidad. Ajusta lo que más importa para tu terreno y continúa.",
+      title: tr("Elige tu prioridad"),
+      text: tr(
+        "La prioridad cambia el peso del agua, la cobertura y la diversidad. Ajusta lo que más importa para tu terreno y continúa.",
+      ),
       path: analysis,
       target: "priority",
     },
     {
-      title: "Planea las tres campañas",
-      text: "Puedes elegir un mes común o meses distintos por campaña anual. Revisa ventanas y duración de cultivos con un técnico de tu zona.",
+      title: tr("Planea las tres campañas"),
+      text: tr(
+        "Puedes elegir un mes común o meses distintos por campaña anual. Revisa ventanas y duración de cultivos con un técnico de tu zona.",
+      ),
       path: analysis,
       target: "calendar",
     },
     {
-      title: "Define los cultivos disponibles",
-      text: "Marca al menos tres cultivos que puedas manejar. Considera semilla, equipo, mercado y experiencia. Los sistemas perennes tienen su propia evaluación de inversión.",
+      title: tr("Define los cultivos disponibles"),
+      text: tr(
+        "Marca al menos tres cultivos que puedas manejar. Considera semilla, equipo, mercado y experiencia. Los sistemas perennes tienen su propia evaluación de inversión.",
+      ),
       path: analysis,
       target: "crops",
       check: () =>
         document.querySelectorAll(".crop-selection input:checked").length >= 3
           ? null
-          : "Selecciona al menos tres cultivos disponibles.",
+          : tr("Selecciona al menos tres cultivos disponibles."),
     },
     {
-      title: "Prepara un primer ensayo",
-      text: "Para practicar con el piloto, marca Activar supuestos de ensayo. El resultado identificará el perfil asumido. En tus siguientes análisis puedes introducir retención y profundidad en Perfil de suelo para representar tu terreno.",
+      title: tr("Prepara un primer ensayo"),
+      text: tr(
+        "Para practicar con el piloto, marca Activar supuestos de ensayo. El resultado identificará el perfil asumido. En tus siguientes análisis puedes introducir retención y profundidad en Perfil de suelo para representar tu terreno.",
+      ),
       path: analysis,
       target: "trial",
       check: () =>
         document.querySelector<HTMLInputElement>('[name="trial"]')?.checked ||
         (value("theta_fc") && value("theta_wp") && value("depth_m"))
           ? null
-          : "Completa retención y profundidad o activa los supuestos de ensayo.",
+          : tr(
+              "Completa retención y profundidad o activa los supuestos de ensayo.",
+            ),
     },
     {
-      title: "Ensaya cambios del clima",
-      text: "Ajusta lluvia y temperatura para tu sensibilidad personalizada. El análisis agrega escenarios de Niño y Niña muy fuertes con cambios locales estimados a partir de NASA y NOAA.",
+      title: tr("Ensaya cambios del clima"),
+      text: tr(
+        "Ajusta lluvia y temperatura para tu sensibilidad personalizada. El análisis agrega escenarios de Niño y Niña muy fuertes con cambios locales estimados a partir de NASA y NOAA.",
+      ),
       path: analysis,
       target: "sensitivity",
     },
     {
-      title: "Incluye los números de tu producción",
-      text: "Introduce precio pactado, rendimiento propio y costo total. Para avanzar puedes completar al menos tres costos o marcar que continuarás con los datos económicos disponibles.",
+      title: tr("Incluye los números de tu producción"),
+      text: tr(
+        "Introduce precio pactado, rendimiento propio y costo total. Para avanzar puedes completar al menos tres costos o marcar que continuarás con los datos económicos disponibles.",
+      ),
       path: analysis,
       target: "economics",
       check: () =>
         document.querySelector('[data-tour="economics"][data-ready="true"]')
           ? null
-          : "Completa al menos tres costos o confirma que continuarás con los datos disponibles.",
+          : tr(
+              "Completa al menos tres costos o confirma que continuarás con los datos disponibles.",
+            ),
     },
     {
-      title: "Ejecuta tu primera comparación",
-      text: "Pulsa Analizar rotaciones en la opción iluminada. Esperaremos el cálculo para enseñarte las alternativas. Puedes saltar el recorrido en cualquier momento.",
+      title: tr("Ejecuta tu primera comparación"),
+      text: tr(
+        "Pulsa Analizar rotaciones en la opción iluminada. Esperaremos el cálculo para enseñarte las alternativas. Puedes saltar el recorrido en cualquier momento.",
+      ),
       path: analysis,
       target: "run",
       check: () =>
-        run ? null : "Pulsa Analizar rotaciones para iniciar el cálculo.",
+        run ? null : tr("Pulsa Analizar rotaciones para iniciar el cálculo."),
     },
     {
-      title: "Compara tus alternativas",
-      text: "Selecciona una secuencia y revisa sus puntos agronómicos, calendario y déficit. Las opciones económicas se buscan entre todas las secuencias viables con datos completos.",
+      title: tr("Compara tus alternativas"),
+      text: tr(
+        "Selecciona una secuencia y revisa sus puntos agronómicos, calendario y déficit. Las opciones económicas se buscan entre todas las secuencias viables con datos completos.",
+      ),
       path: results,
       target: "results",
     },
     {
-      title: "Interpreta la rentabilidad",
-      text: "Consulta ingreso, costo, utilidad y punto de equilibrio. Los valores pendientes indican qué datos necesitas aportar. Puedes cambiar entre bolivianos y dólares.",
+      title: tr("Interpreta la rentabilidad"),
+      text: tr(
+        "Consulta ingreso, costo, utilidad y punto de equilibrio. Los valores pendientes indican qué datos necesitas aportar. Puedes cambiar entre bolivianos y dólares.",
+      ),
       path: results,
       target: "economic-results",
     },
     {
-      title: "Explora la sensibilidad ENSO",
-      text: "Compara escenarios y revisa cuánto cambia el déficit en porcentaje. La lluvia mensual tiene intervalos de incertidumbre y marcas de extrapolación.",
+      title: tr("Explora la sensibilidad ENSO"),
+      text: tr(
+        "Compara escenarios y revisa cuánto cambia el déficit en porcentaje. La lluvia mensual tiene intervalos de incertidumbre y marcas de extrapolación.",
+      ),
       path: results,
       target: "climate-impact",
     },
     {
-      title: "Descarga tu informe",
-      text: "Generar informe prepara el PDF, los indicadores y la serie diaria de la alternativa elegida. Los documentos conservan las fuentes y los supuestos del análisis.",
+      title: tr("Descarga tu informe"),
+      text: tr(
+        "Generar informe prepara el PDF, los indicadores y la serie diaria de la alternativa elegida. Los documentos conservan las fuentes y los supuestos del análisis.",
+      ),
       path: results,
       target: "export",
     },
     {
-      title: "Conoce cultivos y estadísticas",
-      text: "Aquí encontrarás café, cacao, vainilla, pitajaya y açaí, su evaluación de inversión y los cuadros de producción, rendimiento y superficie de la CAO.",
+      title: tr("Conoce cultivos y estadísticas"),
+      text: tr(
+        "Aquí encontrarás café, cacao, vainilla, pitajaya y açaí, su evaluación de inversión y los cuadros de producción, rendimiento y superficie de la CAO.",
+      ),
       path: "/cultivos",
       target: "crop-library",
     },
     {
-      title: "Tu espacio está listo",
-      text: "El menú reúne tus lotes, análisis, informes y fuentes de mercado. Desde tu perfil puedes volver a abrir la guía. El recorrido automático se muestra una sola vez por cuenta.",
+      title: tr("Tu espacio está listo"),
+      text: tr(
+        "El menú reúne tus lotes, análisis, informes y fuentes de mercado. Desde tu perfil puedes volver a abrir la guía. El recorrido automático se muestra una sola vez por cuenta.",
+      ),
       path: "/",
       target: "profile",
     },
@@ -234,7 +296,7 @@ export function GuidedTour({
     };
     window.addEventListener("skyfield-analysis-started", started);
     const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") actions.current.onFinish();
+      if (event.key === tr("Escape")) actions.current.onFinish();
     };
     document.addEventListener("keydown", escape);
     return () => {
@@ -390,14 +452,18 @@ export function GuidedTour({
       >
         <div className="tour-top">
           <span>
-            Tu primer lote · {step + 1} de {steps.length}
+            {tr(" Tu primer lote · ")}
+            {step + 1}
+            {tr(" de ")}
+            {steps.length}
           </span>
           <button
             className="text-button"
             onClick={onFinish}
-            aria-label="Saltar recorrido"
+            aria-label={tr("Saltar recorrido")}
           >
-            Saltar <X size={15} />
+            {tr(" Saltar ")}
+            <X size={15} />
           </button>
         </div>
         <progress value={step + 1} max={steps.length} />
@@ -406,7 +472,9 @@ export function GuidedTour({
           {current.text}
         </p>
         {waiting && (
-          <small role="status">Esperando a que la opción esté lista…</small>
+          <small role="status">
+            {tr("Esperando a que la opción esté lista…")}
+          </small>
         )}
         {error && (
           <p className="error" role="alert">
@@ -419,14 +487,15 @@ export function GuidedTour({
             disabled={step === 0}
             onClick={() => setStep(step - 1)}
           >
-            <ArrowLeft size={15} /> Anterior
+            <ArrowLeft size={15} />
+            {tr(" Anterior ")}
           </button>
           <button
             className="button primary"
             disabled={waiting}
             onClick={advance}
           >
-            {step + 1 < steps.length ? "Siguiente" : "Finalizar"}
+            {step + 1 < steps.length ? tr("Siguiente") : tr("Finalizar")}
             <ArrowRight size={15} />
           </button>
         </div>

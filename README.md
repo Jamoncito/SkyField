@@ -2,7 +2,17 @@
 
 SkyField reúne clima, suelo y economía agrícola para planificar terrenos y comparar tres campañas anuales. La interfaz funciona en escritorio y móvil. La guía inicial crea el primer lote con el usuario, valida los datos antes de avanzar y permite saltar el recorrido. El punto piloto de Santa Cruz se elige explícitamente desde el mapa.
 
-## Versión 2.0.0
+## Versión 2.1.0
+
+- El panel espera la selección explícita del lote antes de mostrar sus indicadores. El pronóstico de siete días, treinta días y la perspectiva estacional se consultan para las coordenadas de ese terreno directamente en el panel. El cambio de lote cancela la petición meteorológica anterior.
+- Inglés como idioma inicial, selector English y Español en la parte inferior izquierda y preferencia persistente. Los PDF se generan de forma independiente por idioma. Las cuentas, nombres de lotes e identificadores conservan su contenido.
+- About identifica al grupo Jupiter como creador de SkyField, explica el propósito, las fuentes, la privacidad, la interpretación y el acceso al repositorio.
+- Índice auditable de integridad de entradas de 0 a 100, con pesos explícitos para histórico, suelo, presupuesto, serie ENSO y pronóstico. La calibración predictiva con mediciones independientes mantiene su estado visible.
+- Intervalos ENSO aproximados con covarianza Newey–West HAC y tres rezagos anuales. Verificación retrospectiva con entrenamiento creciente desde veinte años y comparación de error contra una referencia temporal, utilizando RONI observado. La habilidad negativa se conserva en las tablas de la web y el PDF.
+- Validación de unidades, rangos, fechas y extremos del pronóstico. Control explícito de miembros estacionales completos. Se unificó el mapa PDF en Pillow y se retiraron GeoAlchemy2, Matplotlib, PyMuPDF y sus dependencias exclusivas. TypeScript verifica imports y parámetros sin uso.
+- Veinticinco casos pytest, aceptación bilingüe, aceptación completa de escritorio y móvil emulado, y pruebas de recuperación. Los scripts reproducibles están en `tests`.
+
+### Funciones de la versión 2.0
 
 - Dashboard con selector de lote, información de suelo, estado del presupuesto, ingreso y utilidad estimados, tiempo cercano y observatorio regional CAO. Las cifras del terreno y los datos regionales identifican sus fuentes y períodos.
 - Catálogo de 24 cultivos. Se simulan 15 cultivos anuales. Café, cacao, vainilla, pitajaya y açaí tienen fichas específicas y evaluación de inversión perenne con establecimiento, años hasta cosecha, flujo de caja, VAN y recuperación simple. Chía, arroz, caña de azúcar y mandarina conservan su manejo específico en las fichas regionales.

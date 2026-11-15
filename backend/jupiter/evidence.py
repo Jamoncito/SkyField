@@ -87,7 +87,7 @@ def recommendation(record, reference, assumed, regional, priority):
         if reference and reference["metrics"]["historical"]["deficit_mm"] is not None:
             difference = historic["deficit_mm"] - reference["metrics"]["historical"]["deficit_mm"]
             comparison = f"{abs(difference):.1f} mm {'más' if difference > 0 else 'menos'} que la referencia" if difference else "Igual a la referencia"
-            reasons.append(comparison + " en déficit medio del histórico.")
+            reasons.append(f"{comparison} en déficit medio del histórico.")
         reasons.append(f"Durante el cultivo se estiman {historic['hot_days']:.1f} días con máxima ≥35 °C y "
                        f"{historic['frost_days']:.1f} con mínima ≤0 °C por ventana. "
                        f"El calendario deja {historic['fallow_days']:.0f} días fuera de cultivo simulado.")

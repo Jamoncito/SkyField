@@ -16,6 +16,7 @@ from .signals import environmental_signals, simulation_timeline
 from .report import render
 from .storage import persist, restore
 from .outlook import climate_context, weather_outlook
+from .quality import evidence_quality
 
 LOG = logging.getLogger("jupiter.worker")
 
@@ -142,6 +143,7 @@ def do_analysis(job, progress):
     for option in output["alternatives"]:
         option["timeline"] = simulation_timeline(daily[option["id"]])
     output.update(dataset_id=str(dataset["id"]),soil=soil,campaigns=campaigns)
+    output["quality"] = evidence_quality(output,run["inputs"],site,run["created"])
     with engine.begin() as conn:
         guard(conn,job)
         query(conn,"UPDATE analysis_runs SET dataset_id=:d WHERE id=:i",d=dataset["id"],i=run["id"])

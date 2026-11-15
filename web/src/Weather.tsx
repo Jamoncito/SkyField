@@ -1,10 +1,10 @@
+import { tr, locale } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { CloudRain, CloudSun, Droplets, RefreshCw } from "lucide-react";
 import { api, day, errorText, n } from "./client";
 import type { ClimateContext, Weather } from "./types";
 import { Plot } from "./Chart";
-
-const months = "Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic".split(" ");
+const months = tr("Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic").split(" ");
 export function WeatherPanel({
   fieldId,
   initial,
@@ -23,12 +23,18 @@ export function WeatherPanel({
     "week",
   );
   const request = useRef(0);
+  const pending = useRef<AbortController | undefined>(undefined);
   async function load() {
     const current = ++request.current;
+    pending.current?.abort();
+    const controller = new AbortController();
+    pending.current = controller;
     setBusy(true);
     setError("");
     try {
-      const next = await api<Weather>("/fields/" + fieldId + "/weather");
+      const next = await api<Weather>("/fields/" + fieldId + "/weather", {
+        signal: controller.signal,
+      });
       if (current === request.current) setWeather(next);
     } catch (e) {
       if (current === request.current) setError(errorText(e));
@@ -41,6 +47,7 @@ export function WeatherPanel({
     if (!initial) void load();
     return () => {
       request.current++;
+      pending.current?.abort();
     };
   }, [fieldId]);
   const total = weather?.days.reduce<number | null>(
@@ -74,19 +81,28 @@ export function WeatherPanel({
       <div className="section-head">
         <div>
           <span className="section-kicker">
-            <CloudSun size={16} /> Tiempo y planificación
+            <CloudSun size={16} />
+            {tr(" Tiempo y planificación ")}
           </span>
-          <h2>{compact ? "Tu próxima semana" : "Pronóstico para tu lote"}</h2>
+          <h2>
+            {compact ? tr("Tu próxima semana") : tr("Pronóstico para tu lote")}
+          </h2>
           <p>
             {weather
-              ? "Consulta " + day(weather.retrieved)
-              : "Pronóstico para el punto del lote"}
+              ? tr("Consulta ") + day(weather.retrieved)
+              : tr("Pronóstico para el punto del lote")}
           </p>
+          {weather && (
+            <p className="weather-location">
+              WGS 84 · {n(weather.point[1], 5)}°, {n(weather.point[0], 5)}° ·
+              Open-Meteo
+            </p>
+          )}
         </div>
         <button
           className="icon-btn"
           type="button"
-          aria-label="Actualizar pronóstico"
+          aria-label={tr("Actualizar pronóstico")}
           onClick={() => void load()}
           disabled={busy}
         >
@@ -96,13 +112,13 @@ export function WeatherPanel({
       {!compact && (
         <div
           className="segments weather-tabs"
-          aria-label="Horizonte meteorológico"
+          aria-label={tr("Horizonte meteorológico")}
         >
           {[
-            ["week", "7 días"],
-            ["month", "30 días"],
-            ["season", "Estacional"],
-            ["cycle", "Año / ciclo"],
+            ["week", tr("7 días")],
+            ["month", tr("30 días")],
+            ["season", tr("Estacional")],
+            ["cycle", tr("Año / ciclo")],
           ].map(([key, label]) => (
             <button
               type="button"
@@ -116,11 +132,18 @@ export function WeatherPanel({
         </div>
       )}
       {busy && !weather && (
-        <p role="status">Consultando los modelos meteorológicos…</p>
+        <p role="status">{tr("Consultando los modelos meteorológicos…")}</p>
       )}
       {error && (
         <p className="error" role="alert">
           {error}
+        </p>
+      )}
+      {weather && (
+        <p className="muted">
+          {tr(
+            `${weather.days.length} días disponibles de 7. La dispersión estacional describe los modelos regionales. La precisión local requiere contraste con estaciones y registros del terreno.`,
+          )}
         </p>
       )}
       {horizon === "week" && weather && (
@@ -131,7 +154,7 @@ export function WeatherPanel({
                 {weather.days.map((d) => (
                   <article className="weather-day" key={d.date}>
                     <small>
-                      {new Intl.DateTimeFormat("es", {
+                      {new Intl.DateTimeFormat(locale(), {
                         weekday: "short",
                         day: "numeric",
                         timeZone: "UTC",
@@ -151,7 +174,8 @@ export function WeatherPanel({
                       {n(d.precipitation_sum, 1)} mm
                     </small>
                     <small>
-                      {n(d.precipitation_probability_max, 0)} % de lluvia
+                      {n(d.precipitation_probability_max, 0)}
+                      {tr(" % de lluvia ")}
                     </small>
                   </article>
                 ))}
@@ -159,33 +183,45 @@ export function WeatherPanel({
               <p className="chart-reading">
                 <CloudSun size={18} />
                 <span>
-                  Se prevén {n(total, 1)} mm en siete días
+                  {tr(" Se prevén ")}
+                  {n(total, 1)}
+                  {tr(" mm en siete días ")}
                   {water != null && (
-                    <> frente a {n(water, 1)} mm de demanda ET₀</>
+                    <>
+                      {tr(" frente a ")}
+                      {n(water, 1)}
+                      {tr(" mm de demanda ET₀")}
+                    </>
                   )}
                   .{" "}
                   {hot > 0
-                    ? `${hot} días con máxima ≥35 °C justifican revisar agua disponible y horarios de trabajo.`
-                    : "Revisa la humedad del suelo antes de sembrar o regar."}{" "}
+                    ? tr(
+                        `${hot} días con máxima ≥35 °C justifican revisar agua disponible y horarios de trabajo.`,
+                      )
+                    : tr(
+                        "Revisa la humedad del suelo antes de sembrar o regar.",
+                      )}{" "}
                   {frost > 0 &&
-                    `${frost} días con mínima ≤0 °C requieren verificar protección y alertas locales.`}
+                    tr(
+                      `${frost} días con mínima ≤0 °C requieren verificar protección y alertas locales.`,
+                    )}
                 </span>
               </p>
               {!compact && (
                 <>
                   <Plot
-                    label="Pronóstico diario de lluvia y temperatura"
+                    label={tr("Pronóstico diario de lluvia y temperatura")}
                     data={[
                       {
                         type: "bar",
-                        name: "Lluvia",
+                        name: tr("Lluvia"),
                         x: weather.days.map((d) => d.date),
                         y: weather.days.map((d) => d.precipitation_sum),
                         marker: { color: "#8fb9a6" },
                       },
                       {
                         type: "scatter",
-                        name: "Máxima",
+                        name: tr("Máxima"),
                         yaxis: "y2",
                         x: weather.days.map((d) => d.date),
                         y: weather.days.map((d) => d.temperature_2m_max),
@@ -193,7 +229,7 @@ export function WeatherPanel({
                       },
                       {
                         type: "scatter",
-                        name: "Mínima",
+                        name: tr("Mínima"),
                         yaxis: "y2",
                         x: weather.days.map((d) => d.date),
                         y: weather.days.map((d) => d.temperature_2m_min),
@@ -202,27 +238,33 @@ export function WeatherPanel({
                     ]}
                     layout={{
                       yaxis: { title: "mm", rangemode: "tozero" },
-                      yaxis2: { title: "°C", overlaying: "y", side: "right" },
+                      yaxis2: {
+                        title: "°C",
+                        overlaying: tr("y"),
+                        side: "right",
+                      },
                       legend: { orientation: "h" },
                     }}
                   />
                   <p className="muted">
-                    Las barras indican agua prevista. Las líneas muestran el
-                    rango térmico diario. La probabilidad expresa la posibilidad
-                    de precipitación en la grilla del modelo.
+                    {tr(
+                      " Las barras indican agua prevista. Las líneas muestran el rango térmico diario. La probabilidad expresa la posibilidad de precipitación en la grilla del modelo. ",
+                    )}
                   </p>
                   {weather.hourly && (
                     <details className="form-details">
                       <summary>
-                        Humedad y punto de rocío de las próximas 24 horas
+                        {tr(
+                          " Humedad y punto de rocío de las próximas 24 horas ",
+                        )}
                       </summary>
                       <div className="table-scroll">
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th>Hora local</th>
-                              <th>Humedad relativa (%)</th>
-                              <th>Punto de rocío (°C)</th>
+                              <th>{tr("Hora local")}</th>
+                              <th>{tr("Humedad relativa (%)")}</th>
+                              <th>{tr("Punto de rocío (°C)")}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -242,10 +284,9 @@ export function WeatherPanel({
                         </table>
                       </div>
                       <p className="muted">
-                        El punto de rocío es la temperatura a la que el aire
-                        alcanzaría saturación. Humedad elevada y rocío pueden
-                        favorecer períodos de mojado foliar. La evaluación
-                        sanitaria requiere observar el cultivo.
+                        {tr(
+                          " El punto de rocío es la temperatura a la que el aire alcanzaría saturación. Humedad elevada y rocío pueden favorecer períodos de mojado foliar. La evaluación sanitaria requiere observar el cultivo. ",
+                        )}
                       </p>
                     </details>
                   )}
@@ -254,8 +295,9 @@ export function WeatherPanel({
             </>
           ) : (
             <p className="notice">
-              El servicio de pronóstico diario está temporalmente sin datos para
-              este punto. Usa Actualizar para volver a consultar.
+              {tr(
+                " El servicio de pronóstico diario está temporalmente sin datos para este punto. Usa Actualizar para volver a consultar. ",
+              )}
             </p>
           )}
         </>
@@ -266,7 +308,7 @@ export function WeatherPanel({
             <>
               <div className="finance-kpis">
                 <div>
-                  <small>Lluvia mediana del conjunto</small>
+                  <small>{tr("Lluvia mediana del conjunto")}</small>
                   <strong>{n(period.rain_mm[1], 0)} mm</strong>
                   <span>
                     P10–P90 {n(period.rain_mm[0], 0)}–{n(period.rain_mm[2], 0)}{" "}
@@ -274,30 +316,35 @@ export function WeatherPanel({
                   </span>
                 </div>
                 <div>
-                  <small>Temperatura media mediana</small>
+                  <small>{tr("Temperatura media mediana")}</small>
                   <strong>{n(period.temp_c[1], 1)} °C</strong>
                   <span>
                     P10–P90 {n(period.temp_c[0], 1)}–{n(period.temp_c[2], 1)} °C
                   </span>
                 </div>
                 <div>
-                  <small>Horizonte agregado</small>
-                  <strong>{period.days} días</strong>
+                  <small>{tr("Horizonte agregado")}</small>
+                  <strong>
+                    {period.days}
+                    {tr(" días")}
+                  </strong>
                   <span>
-                    {period.start} a {period.end} · {period.members} miembros
+                    {period.start}
+                    {tr(" a ")}
+                    {period.end} · {period.members}
+                    {tr(" miembros ")}
                   </span>
                 </div>
               </div>
               <p className="chart-reading">
-                La amplitud del intervalo muestra cuánto difieren las
-                trayectorias del modelo. Usa este horizonte para comparar fechas
-                y reservas de agua, revisando el pronóstico diario al acercarse
-                la operación.
+                {tr(
+                  " La amplitud del intervalo muestra cuánto difieren las trayectorias del modelo. Usa este horizonte para comparar fechas y reservas de agua, revisando el pronóstico diario al acercarse la operación. ",
+                )}
               </p>
             </>
           ) : (
             <p className="notice">
-              La perspectiva de 30 días está temporalmente sin datos.
+              {tr(" La perspectiva de 30 días está temporalmente sin datos. ")}
             </p>
           )}
         </>
@@ -307,11 +354,13 @@ export function WeatherPanel({
           {weather?.seasonal.length ? (
             <>
               <Plot
-                label="Perspectiva estacional de precipitación con dispersión entre miembros"
+                label={tr(
+                  "Perspectiva estacional de precipitación con dispersión entre miembros",
+                )}
                 data={[
                   {
                     type: "bar",
-                    name: "Mediana de lluvia",
+                    name: tr("Mediana de lluvia"),
                     x: weather.seasonal.map((m) => m.month),
                     y: weather.seasonal.map((m) => m.rain_mm?.[1]),
                     marker: { color: "#3f8067" },
@@ -329,24 +378,23 @@ export function WeatherPanel({
                   },
                 ]}
                 layout={{
-                  yaxis: { title: "mm en días cubiertos" },
+                  yaxis: { title: tr("mm en días cubiertos") },
                   showlegend: false,
                 }}
               />
               <p className="chart-reading">
-                Las barras muestran la mediana de lluvia y los bigotes delimitan
-                P10–P90 del conjunto. Los primeros y últimos meses pueden tener
-                cobertura parcial. Una dispersión amplia requiere preparar
-                opciones de manejo para condiciones distintas.
+                {tr(
+                  " Las barras muestran la mediana de lluvia y los bigotes delimitan P10–P90 del conjunto. Los primeros y últimos meses pueden tener cobertura parcial. Una dispersión amplia requiere preparar opciones de manejo para condiciones distintas. ",
+                )}
               </p>
               <div className="table-scroll">
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Mes</th>
-                      <th>Días cubiertos</th>
-                      <th>Lluvia P10 / P50 / P90 (mm)</th>
-                      <th>Temp. media P10 / P50 / P90 (°C)</th>
+                      <th>{tr("Mes")}</th>
+                      <th>{tr("Días cubiertos")}</th>
+                      <th>{tr("Lluvia P10 / P50 / P90 (mm)")}</th>
+                      <th>{tr("Temp. media P10 / P50 / P90 (°C)")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -356,11 +404,11 @@ export function WeatherPanel({
                         <td>{m.days}</td>
                         <td>
                           {m.rain_mm?.map((x) => n(x, 0)).join(" / ") ??
-                            "Sin dato"}
+                            tr("Sin dato")}
                         </td>
                         <td>
                           {m.temp_c?.map((x) => n(x, 1)).join(" / ") ??
-                            "Sin dato"}
+                            tr("Sin dato")}
                         </td>
                       </tr>
                     ))}
@@ -370,7 +418,7 @@ export function WeatherPanel({
             </>
           ) : (
             <p className="notice">
-              La perspectiva estacional está temporalmente sin datos.
+              {tr(" La perspectiva estacional está temporalmente sin datos. ")}
             </p>
           )}
         </>
@@ -380,48 +428,50 @@ export function WeatherPanel({
           {climate?.status === "available" ? (
             <>
               <h3>
-                Referencia anual del clima, {climate.start}–{climate.end}
+                {tr(" Referencia anual del clima, ")}
+                {climate.start}–{climate.end}
               </h3>
               <Plot
-                label="Climatología mensual y variabilidad histórica de lluvia"
+                label={tr(
+                  "Climatología mensual y variabilidad histórica de lluvia",
+                )}
                 data={[
                   {
                     type: "bar",
                     x: months,
                     y: climate.months.map((m) => m.rain_mm),
-                    name: "Media histórica",
+                    name: tr("Media histórica"),
                     marker: { color: "#80aa8b" },
                   },
                 ]}
                 layout={{ yaxis: { title: "mm/mes" }, showlegend: false }}
               />
               <p className="chart-reading">
-                La distribución histórica permite ubicar la estación lluviosa y
-                seca para planificar el ciclo. La perspectiva estacional cubre
-                hasta unos seis meses desde esta consulta. Para los meses
-                posteriores, contrasta esta referencia con los escenarios ENSO y
-                de calentamiento.
+                {tr(
+                  " La distribución histórica permite ubicar la estación lluviosa y seca para planificar el ciclo. La perspectiva estacional cubre hasta unos seis meses desde esta consulta. Para los meses posteriores, contrasta esta referencia con los escenarios ENSO y de calentamiento. ",
+                )}
               </p>
             </>
           ) : (
             <p className="notice">
-              La referencia anual y los escenarios del ciclo aparecerán al
-              terminar un análisis climático del lote.
+              {tr(
+                " La referencia anual y los escenarios del ciclo aparecerán al terminar un análisis climático del lote. ",
+              )}
             </p>
           )}
         </>
       )}
       {!compact && weather && (
         <details className="form-details">
-          <summary>Fuente, resolución e incertidumbre</summary>
+          <summary>{tr("Fuente, resolución e incertidumbre")}</summary>
           <p>{weather.method}</p>
           <p>{weather.interpretation}</p>
           <div className="source-links">
             <a href={weather.source_url} target="_blank" rel="noreferrer">
-              Open-Meteo, pronóstico
+              {tr(" Open-Meteo, pronóstico ")}
             </a>
             <a href={weather.seasonal_url} target="_blank" rel="noreferrer">
-              Open-Meteo, EC46 y SEAS5
+              {tr(" Open-Meteo, EC46 y SEAS5 ")}
             </a>
             <a href="https://senamhi.gob.bo/" target="_blank" rel="noreferrer">
               SENAMHI Bolivia

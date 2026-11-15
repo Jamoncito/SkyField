@@ -21,7 +21,7 @@ from .catalog import CONTEXT, catalog
 from .soil import lookup
 
 LOG = logging.getLogger("jupiter.api")
-app = FastAPI(title="SkyField", version="2.0.0", docs_url="/api/docs",
+app = FastAPI(title="SkyField", version="2.1.0", docs_url="/api/docs",
               openapi_url="/api/openapi.json", redoc_url=None)
 
 class Credentials(BaseModel):
@@ -121,6 +121,7 @@ class AnalysisInput(BaseModel):
 
 class ReportInput(BaseModel):
     rotation_id: str = Field(min_length=1, max_length=40)
+    language: Literal["en","es"] = "es"
 
 def read_user(request: Request):
     with engine.connect() as conn:
@@ -429,8 +430,11 @@ def analysis(run_id: UUID, user=Depends(read_user)):
     with engine.connect() as conn:
         row = owned(conn, "analysis_runs", run_id, user["id"])
         output = one(conn, "SELECT output, model_version FROM results WHERE run_id=:r", r=run_id)
-        return dict(id=row["id"], created=row["created"], field=row["field_snapshot"], inputs=row["inputs"],
-                    result=output["output"] if output else None)
+        result = output["output"] if output else None
+        if result and "quality" not in result:
+            from .quality import evidence_quality
+            result["quality"] = evidence_quality(result,row["inputs"],row["field_snapshot"],row["created"])
+        return dict(id=row["id"], created=row["created"], field=row["field_snapshot"], inputs=row["inputs"],result=result)
 
 @app.get("/api/jobs/{job_id}")
 def job(job_id: UUID, user=Depends(read_user)):
@@ -461,16 +465,16 @@ def create_report(run_id: UUID, body: ReportInput, user=Depends(write_user)):
         if not result or body.rotation_id not in [record["id"] for record in result["output"]["alternatives"]]:
             raise HTTPException(422, "Selecciona una alternativa disponible en un análisis terminado.")
         row = one(conn, """
-          INSERT INTO reports(owner,run_id,rotation_id,producer,template_version) VALUES(:o,:a,:rot,:p,3)
-          ON CONFLICT(run_id,rotation_id,template_version) DO UPDATE SET rotation_id=excluded.rotation_id RETURNING id
-        """, o=user["id"], a=run_id, rot=body.rotation_id, p=user["name"])
+          INSERT INTO reports(owner,run_id,rotation_id,producer,template_version,language) VALUES(:o,:a,:rot,:p,4,:lang)
+          ON CONFLICT(run_id,rotation_id,template_version,language) DO UPDATE SET rotation_id=excluded.rotation_id RETURNING id
+        """, o=user["id"], a=run_id, rot=body.rotation_id, p=user["name"],lang=body.language)
         return dict(enqueue(conn, user["id"], "report", row["id"], f"report:{row['id']}"))
 
 @app.get("/api/reports")
 def reports(user=Depends(read_user)):
     with engine.connect() as conn:
         return many(conn, """
-           SELECT r.id,r.run_id,r.rotation_id,r.created,r.artifact_key IS NOT NULL AS ready,
+           SELECT r.id,r.run_id,r.rotation_id,r.created,r.language,r.artifact_key IS NOT NULL AS ready,
              a.field_snapshot->>'name' AS field_name,j.status,j.id AS job_id
            FROM reports r JOIN analysis_runs a ON r.run_id=a.id JOIN jobs j ON j.target=r.id AND j.kind='report'
            WHERE r.owner=:o ORDER BY r.created DESC LIMIT 50

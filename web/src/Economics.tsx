@@ -1,3 +1,4 @@
+import { tr } from "./i18n";
 import { useEffect, useState } from "react";
 import { ArrowRight, Banknote, Scale, TrendingUp } from "lucide-react";
 import { api, errorText, n } from "./client";
@@ -10,7 +11,6 @@ import type {
   Option,
 } from "./types";
 import { Plot } from "./Chart";
-
 let marketRequest: Promise<Market> | undefined;
 export function useMarket() {
   const [market, setMarket] = useState<Market>(),
@@ -34,7 +34,6 @@ export function useMarket() {
   }, []);
   return { market, error };
 }
-
 export function BudgetEditor({
   crops,
   allowed,
@@ -71,10 +70,11 @@ export function BudgetEditor({
       data-tour="economics"
       data-ready={acknowledged || costCount >= 3}
     >
-      <summary>Presupuesto y rentabilidad</summary>
+      <summary>{tr("Presupuesto y rentabilidad")}</summary>
       <p>
-        Compara ingreso, costo total y utilidad por hectárea de cada secuencia.
-        Puedes completar el presupuesto de los cultivos con los que trabajas.
+        {tr(
+          " Compara ingreso, costo total y utilidad por hectárea de cada secuencia. Puedes completar el presupuesto de los cultivos con los que trabajas. ",
+        )}
       </p>
       {error && (
         <p className="error" role="alert">
@@ -85,7 +85,7 @@ export function BudgetEditor({
         <>
           <div className="three-col form-gap">
             <label>
-              Campaña CAO de referencia
+              {tr(" Campaña CAO de referencia ")}
               <select
                 value={value.yield_year ?? 2024}
                 onChange={(e) =>
@@ -98,7 +98,7 @@ export function BudgetEditor({
               </select>
             </label>
             <label>
-              Descuento desde mayorista a finca (%)
+              {tr(" Descuento desde mayorista a finca (%) ")}
               <input
                 type="number"
                 min="0"
@@ -114,7 +114,7 @@ export function BudgetEditor({
               />
             </label>
             <label>
-              Tipo de cambio (Bs/USD)
+              {tr(" Tipo de cambio (Bs/USD) ")}
               <input
                 type="number"
                 min=".001"
@@ -133,30 +133,30 @@ export function BudgetEditor({
             </label>
           </div>
           <p className="muted">
-            BCB {market.fx.date} · {n(market.fx.bob_per_usd, 2)} Bs/USD.
-            Descuento 0 conserva la referencia mayorista. Un precio pactado
-            reemplaza esa referencia. Los rendimientos CAO se seleccionan según
-            verano o invierno y mes de siembra.
+            BCB {market.fx.date} · {n(market.fx.bob_per_usd, 2)}
+            {tr(
+              " Bs/USD. Descuento 0 conserva la referencia mayorista. Un precio pactado reemplaza esa referencia. Los rendimientos CAO se seleccionan según verano o invierno y mes de siembra. ",
+            )}
           </p>
           <div className="table-scroll">
             <table className="data-table budget-table">
               <thead>
                 <tr>
-                  <th>Cultivo</th>
+                  <th>{tr("Cultivo")}</th>
                   <th>
-                    Precio pactado
+                    {tr(" Precio pactado ")}
                     <br />
                     Bs/t
                   </th>
                   <th>
-                    Rendimiento propio
+                    {tr(" Rendimiento propio ")}
                     <br />
                     t/ha
                   </th>
                   <th>
-                    Costo total
+                    {tr(" Costo total ")}
                     <br />
-                    Bs/ha por campaña
+                    {tr(" Bs/ha por campaña ")}
                   </th>
                 </tr>
               </thead>
@@ -174,13 +174,13 @@ export function BudgetEditor({
                         <small>
                           {price
                             ? `${price.date} · ${n(price.bob_t, 0)} Bs/t`
-                            : "Precio pendiente"}
-                          {ref ? " · CAO disponible" : ""}
+                            : tr("Precio pendiente")}
+                          {ref ? tr(" · CAO disponible") : ""}
                         </small>
                       </td>
                       <td>
                         <input
-                          aria-label={"Precio de " + c.name}
+                          aria-label={tr("Precio de ") + c.name}
                           type="number"
                           min="0"
                           max="100000000"
@@ -189,8 +189,8 @@ export function BudgetEditor({
                             price
                               ? n(price.bob_t, 0)
                               : c.code === "cover"
-                                ? "0 ingreso por grano"
-                                : "Sin dato"
+                                ? tr("0 ingreso por grano")
+                                : tr("Sin dato")
                           }
                           value={b?.sale_bob_t ?? ""}
                           onChange={(e) =>
@@ -200,17 +200,17 @@ export function BudgetEditor({
                       </td>
                       <td>
                         <input
-                          aria-label={"Rendimiento de " + c.name}
+                          aria-label={tr("Rendimiento de ") + c.name}
                           type="number"
                           min="0"
                           max="500"
                           step=".001"
                           placeholder={
                             ref
-                              ? "Usar CAO"
+                              ? tr("Usar CAO")
                               : c.code === "cover"
-                                ? "0 grano"
-                                : "Sin dato"
+                                ? tr("0 grano")
+                                : tr("Sin dato")
                           }
                           value={b?.yield_t_ha ?? ""}
                           onChange={(e) =>
@@ -220,12 +220,12 @@ export function BudgetEditor({
                       </td>
                       <td>
                         <input
-                          aria-label={"Costo de " + c.name}
+                          aria-label={tr("Costo de ") + c.name}
                           type="number"
                           min="0"
                           max="100000000"
                           step=".01"
-                          placeholder="Completar"
+                          placeholder={tr("Completar")}
                           value={b?.cost_bob_ha ?? ""}
                           onChange={(e) =>
                             budget(c.code, "cost_bob_ha", e.target.value)
@@ -239,11 +239,9 @@ export function BudgetEditor({
             </table>
           </div>
           <p className="muted">
-            Incluye insumos, labores, cosecha, transporte, arriendo,
-            financiamiento e impuestos en el costo total. El presupuesto de
-            cobertura contabiliza su costo y permite declarar un ingreso
-            forrajero o una venta cuando exista. Las referencias de girasol y
-            trigo pertenecen a 2024.
+            {tr(
+              " Incluye insumos, labores, cosecha, transporte, arriendo, financiamiento e impuestos en el costo total. El presupuesto de cobertura contabiliza su costo y permite declarar un ingreso forrajero o una venta cuando exista. Las referencias de girasol y trigo pertenecen a 2024. ",
+            )}
           </p>
           <label className="check-label">
             <input
@@ -252,8 +250,9 @@ export function BudgetEditor({
               onChange={(e) => setAcknowledged(e.target.checked)}
             />
             <span>
-              Continuar con los datos económicos disponibles y completar mi
-              presupuesto después
+              {tr(
+                " Continuar con los datos económicos disponibles y completar mi presupuesto después ",
+              )}
             </span>
           </label>
         </>
@@ -261,7 +260,6 @@ export function BudgetEditor({
     </details>
   );
 }
-
 export function EconomicsPanel({
   summary,
   options,
@@ -279,7 +277,7 @@ export function EconomicsPanel({
   const fx = summary.settings.bob_per_usd ?? summary.market.fx.bob_per_usd;
   const money = (value: number | null | undefined) =>
     value == null
-      ? "Pendiente"
+      ? tr("Pendiente")
       : (currency === "BOB" ? "Bs " : "USD ") +
         n(value / (currency === "USD" ? fx : 1), 0);
   const budget = selected?.economics;
@@ -294,25 +292,28 @@ export function EconomicsPanel({
       <div className="section-head">
         <div>
           <span className="section-kicker">
-            <Banknote size={16} /> Economía del lote
+            <Banknote size={16} />
+            {tr(" Economía del lote ")}
           </span>
-          <h2>Compara utilidad y punto de equilibrio</h2>
+          <h2>{tr("Compara utilidad y punto de equilibrio")}</h2>
           <p>
-            Tres campañas anuales · valores por hectárea · precios constantes
+            {tr(
+              " Tres campañas anuales · valores por hectárea · precios constantes ",
+            )}
           </p>
         </div>
-        <div className="segments" aria-label="Moneda">
+        <div className="segments" aria-label={tr("Moneda")}>
           <button
             aria-pressed={currency === "BOB"}
             onClick={() => setCurrency("BOB")}
           >
-            Bolivianos
+            {tr(" Bolivianos ")}
           </button>
           <button
             aria-pressed={currency === "USD"}
             onClick={() => setCurrency("USD")}
           >
-            Dólares
+            {tr(" Dólares ")}
           </button>
         </div>
       </div>
@@ -321,48 +322,51 @@ export function EconomicsPanel({
           <TrendingUp size={25} />
           <div>
             <small>
-              Mayor utilidad estimada entre {summary.evaluated} secuencias con
-              presupuesto completo
+              {tr(" Mayor utilidad estimada entre ")}
+              {summary.evaluated}
+              {tr(" secuencias con presupuesto completo ")}
             </small>
             <h3>{best.names.join(" → ")}</h3>
             <p>
-              {money(best.economics!.net_bob_ha)} por hectárea en tres campañas
-              · {n(best.score, 1)} puntos agronómicos.
+              {money(best.economics!.net_bob_ha)}
+              {tr(" por hectárea en tres campañas · ")}
+              {n(best.score, 1)}
+              {tr(" puntos agronómicos. ")}
             </p>
             <button className="text-button" onClick={() => onSelect(best.id)}>
-              Examinar esta rotación <ArrowRight size={15} />
+              {tr(" Examinar esta rotación ")}
+              <ArrowRight size={15} />
             </button>
           </div>
         </div>
       ) : (
         <div className="notice">
-          Completa precio, rendimiento y costo total de tres cultivos
-          compatibles para identificar la mayor utilidad. Las secuencias con
-          datos completos de precio y rendimiento muestran su ingreso bruto de
-          referencia.
+          {tr(
+            " Completa precio, rendimiento y costo total de tres cultivos compatibles para identificar la mayor utilidad. Las secuencias con datos completos de precio y rendimiento muestran su ingreso bruto de referencia. ",
+          )}
         </div>
       )}
       <div className="finance-kpis">
         {[
-          ["Ingreso bruto", budget?.revenue_bob_ha],
-          ["Costo total", budget?.cost_bob_ha],
-          ["Utilidad estimada", budget?.net_bob_ha],
+          [tr("Ingreso bruto"), budget?.revenue_bob_ha],
+          [tr("Costo total"), budget?.cost_bob_ha],
+          [tr("Utilidad estimada"), budget?.net_bob_ha],
         ].map(([label, value]) => (
           <div key={String(label)}>
             <small>{label}</small>
             <strong>{money(value as number | null | undefined)}</strong>
-            <span>por ha · tres campañas</span>
+            <span>{tr("por ha · tres campañas")}</span>
           </div>
         ))}
       </div>
       <Plot
-        label="Comparación económica por rotación"
+        label={tr("Comparación económica por rotación")}
         data={
           complete.length
             ? [
                 {
                   type: "bar",
-                  name: "Ingreso",
+                  name: tr("Ingreso"),
                   x: complete.map((o) => o.names.join(" → ")),
                   y: complete.map(
                     (o) =>
@@ -373,7 +377,7 @@ export function EconomicsPanel({
                 },
                 {
                   type: "bar",
-                  name: "Costo total",
+                  name: tr("Costo total"),
                   x: complete.map((o) => o.names.join(" → ")),
                   y: complete.map(
                     (o) =>
@@ -383,7 +387,7 @@ export function EconomicsPanel({
                 },
                 {
                   type: "bar",
-                  name: "Utilidad",
+                  name: tr("Utilidad"),
                   x: complete.map((o) => o.names.join(" → ")),
                   y: complete.map(
                     (o) =>
@@ -395,7 +399,7 @@ export function EconomicsPanel({
             : [
                 {
                   type: "bar",
-                  name: "Ingreso bruto de referencia",
+                  name: tr("Ingreso bruto de referencia"),
                   x: priced.map((o) => o.names.join(" → ")),
                   y: priced.map(
                     (o) =>
@@ -417,8 +421,12 @@ export function EconomicsPanel({
       <p className="chart-reading">
         <Scale size={18} />
         {budget?.net_bob_ha != null
-          ? `La alternativa elegida deja ${money(budget.net_bob_ha)} por ha con el presupuesto declarado. ${budget.net_bob_ha >= 0 ? "El ingreso cubre los costos introducidos." : "El costo supera el ingreso estimado."}`
-          : "Las barras representan ingresos antes de deducir los costos que faltan. El monto final depende de tu presupuesto y precio de venta."}
+          ? tr(
+              `La alternativa elegida deja ${money(budget.net_bob_ha)} por ha con el presupuesto declarado. ${budget.net_bob_ha >= 0 ? "El ingreso cubre los costos introducidos." : "El costo supera el ingreso estimado."}`,
+            )
+          : tr(
+              "Las barras representan ingresos antes de deducir los costos que faltan. El monto final depende de tu presupuesto y precio de venta.",
+            )}
       </p>
       {budget && (
         <>
@@ -426,13 +434,13 @@ export function EconomicsPanel({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Campaña</th>
-                  <th>Precio Bs/t</th>
-                  <th>Rendimiento t/ha</th>
-                  <th>Costo Bs/ha</th>
-                  <th>Utilidad Bs/ha</th>
-                  <th>Equilibrio Bs/t</th>
-                  <th>Equilibrio t/ha</th>
+                  <th>{tr("Campaña")}</th>
+                  <th>{tr("Precio Bs/t")}</th>
+                  <th>{tr("Rendimiento t/ha")}</th>
+                  <th>{tr("Costo Bs/ha")}</th>
+                  <th>{tr("Utilidad Bs/ha")}</th>
+                  <th>{tr("Equilibrio Bs/t")}</th>
+                  <th>{tr("Equilibrio t/ha")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -462,23 +470,25 @@ export function EconomicsPanel({
           {budget.net_bob_ha != null && (
             <div className="two-col">
               <div className="action-item">
-                <b>Retorno sobre el costo</b>
+                <b>{tr("Retorno sobre el costo")}</b>
                 <p>
-                  {n(budget.roi_pct, 1)} % en las tres campañas.{" "}
+                  {n(budget.roi_pct, 1)}
+                  {tr(" % en las tres campañas.")}{" "}
                   {budget.net_field_bob != null && (
                     <>
-                      Utilidad del área delimitada {money(budget.net_field_bob)}
-                      .
+                      {tr(" Utilidad del área delimitada ")}
+                      {money(budget.net_field_bob)}.
                     </>
                   )}
                 </p>
               </div>
               <div className="action-item">
-                <b>Prueba de resistencia económica</b>
+                <b>{tr("Prueba de resistencia económica")}</b>
                 <p>
-                  {money(budget.downside_bob_ha)} por ha si el rendimiento y el
-                  precio caen 20 % cada uno y el costo sube 20 %. Ajuste
-                  hipotético de presupuesto.
+                  {money(budget.downside_bob_ha)}
+                  {tr(
+                    " por ha si el rendimiento y el precio caen 20 % cada uno y el costo sube 20 %. Ajuste hipotético de presupuesto. ",
+                  )}
                 </p>
               </div>
             </div>
@@ -486,10 +496,11 @@ export function EconomicsPanel({
         </>
       )}
       <button className="button secondary" onClick={onEdit}>
-        Ajustar presupuesto y recalcular <ArrowRight size={16} />
+        {tr(" Ajustar presupuesto y recalcular ")}
+        <ArrowRight size={16} />
       </button>
       <details className="form-details">
-        <summary>Fórmulas, incertidumbre y fuente de precios</summary>
+        <summary>{tr("Fórmulas, incertidumbre y fuente de precios")}</summary>
         <p>{summary.method}</p>
         <p>{summary.uncertainty}</p>
         <MarketTable market={summary.market} />
@@ -497,24 +508,25 @@ export function EconomicsPanel({
     </section>
   );
 }
-
 export function MarketTable({ market }: { market: Market }) {
   return (
     <>
       <p>{market.market_note}</p>
       <p className="muted">
-        Base verificada {market.verified} · BCB {market.fx.date} ·{" "}
-        {n(market.fx.bob_per_usd, 2)} Bs/USD, vigencia hasta{" "}
-        {market.fx.valid_until}.
+        {tr(" Base verificada ")}
+        {market.verified}
+        {tr(" · BCB ")}
+        {market.fx.date} · {n(market.fx.bob_per_usd, 2)}
+        {tr(" Bs/USD, vigencia hasta")} {market.fx.valid_until}.
       </p>
       <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
-              <th>Producto nacional</th>
+              <th>{tr("Producto nacional")}</th>
               <th>Bs/t</th>
               <th>USD/t</th>
-              <th>Fecha y mercado</th>
+              <th>{tr("Fecha y mercado")}</th>
             </tr>
           </thead>
           <tbody>
@@ -531,7 +543,9 @@ export function MarketTable({ market }: { market: Market }) {
                 <td>
                   {p.date}
                   <small>
-                    {p.market} · página {p.page}
+                    {p.market}
+                    {tr(" · página ")}
+                    {p.page}
                   </small>
                 </td>
               </tr>
@@ -539,15 +553,15 @@ export function MarketTable({ market }: { market: Market }) {
           </tbody>
         </table>
       </div>
-      <h3>Referencias internacionales</h3>
+      <h3>{tr("Referencias internacionales")}</h3>
       <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
-              <th>Producto</th>
+              <th>{tr("Producto")}</th>
               <th>USD/t</th>
-              <th>Fecha</th>
-              <th>Mercado</th>
+              <th>{tr("Fecha")}</th>
+              <th>{tr("Mercado")}</th>
             </tr>
           </thead>
           <tbody>
@@ -564,17 +578,17 @@ export function MarketTable({ market }: { market: Market }) {
       </div>
       {!!market.comparisons?.length && (
         <>
-          <h3>Brecha entre referencias nacionales e internacionales</h3>
+          <h3>{tr("Brecha entre referencias nacionales e internacionales")}</h3>
           <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Producto nacional</th>
-                  <th>Nacional USD/t</th>
-                  <th>Referencia internacional</th>
-                  <th>Internacional USD/t</th>
-                  <th>Brecha USD/t</th>
-                  <th>Brecha %</th>
+                  <th>{tr("Producto nacional")}</th>
+                  <th>{tr("Nacional USD/t")}</th>
+                  <th>{tr("Referencia internacional")}</th>
+                  <th>{tr("Internacional USD/t")}</th>
+                  <th>{tr("Brecha USD/t")}</th>
+                  <th>{tr("Brecha %")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -598,11 +612,9 @@ export function MarketTable({ market }: { market: Market }) {
             </table>
           </div>
           <p className="chart-reading">
-            La brecha es el precio nacional convertido a USD menos la referencia
-            internacional. El porcentaje divide esa diferencia por la referencia
-            internacional. Cada fila conserva sus fechas. Calidad, condiciones
-            de entrega y logística requieren una cotización específica para
-            evaluar una venta.
+            {tr(
+              " La brecha es el precio nacional convertido a USD menos la referencia internacional. El porcentaje divide esa diferencia por la referencia internacional. Cada fila conserva sus fechas. Calidad, condiciones de entrega y logística requieren una cotización específica para evaluar una venta. ",
+            )}
           </p>
         </>
       )}
@@ -616,7 +628,7 @@ export function MarketTable({ market }: { market: Market }) {
           </a>
         ))}
         <a href={market.fx.url} target="_blank" rel="noreferrer">
-          Tipo de cambio BCB
+          {tr(" Tipo de cambio BCB ")}
         </a>
       </div>
     </>

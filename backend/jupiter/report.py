@@ -15,6 +15,8 @@ from plotly.subplots import make_subplots
 from .climate import sha
 from .db import ROOT, STORAGE
 from .jobs import JobError
+from .i18n import localize, translate
+from .quality import evidence_quality
 
 MONTHS = "Ene Feb Mar Abr May Jun Jul Ago Sep Oct Nov Dic".split()
 METRICS = {"deficit_mm":("Déficit hídrico","mm"),"stress_days":("Días con déficit","días"),
@@ -28,51 +30,6 @@ def embed(data, media="image/png"):
     return f"data:{media};base64,"+base64.b64encode(data).decode()
 
 def map_figure(site):
-    if os.getenv("JUPITER_WINDOWS_PORTABLE") == "1" or os.getenv("LOW_MEMORY") == "1":
-        return portable_map(site)
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from math import cos, radians, floor, log10
-    f, a = plt.subplots(figsize=(5.3,2.5))
-    f.patch.set_facecolor("#edf2e8")
-    a.set_facecolor("#edf2e8")
-    lon, lat = site["lon"],site["lat"]
-    def project(x,y):
-        return ((x-lon)*111320*cos(radians(lat)),(y-lat)*110540)
-    geo = site["geometry"]
-    if geo["type"] == "Point":
-        a.scatter([0],[0],s=120,color="#20624a",edgecolor="white",linewidth=2,zorder=3)
-        a.set_xlim(-160,160)
-        a.set_ylim(-85,85)
-    else:
-        polys = [geo["coordinates"]] if geo["type"]=="Polygon" else geo["coordinates"]
-        for p in polys:
-            for i,ring in enumerate(p):
-                x,y = zip(*(project(*pair) for pair in ring))
-                a.fill(x,y,facecolor="#a9d58c" if not i else "#edf2e8",edgecolor="#23634b",lw=1.5)
-        a.margins(.24)
-    a.set_aspect("equal",adjustable="datalim")
-    f.canvas.draw()
-    x1,x2=a.get_xlim()
-    y1,y2=a.get_ylim()
-    target = (x2-x1)*.22
-    scale = 10**floor(log10(target))
-    bar = max(v*scale/10 for v in (1,2,5,10,20,50) if v*scale/10<=target)
-    a.plot([x1+.07*(x2-x1),x1+.07*(x2-x1)+bar],[y1+.12*(y2-y1)]*2,color="#17392c",lw=2)
-    a.text(.07,.18,f"{bar:g} m",transform=a.transAxes,fontsize=8)
-    a.annotate("N",xy=(.92,.66),xytext=(.92,.86),xycoords="axes fraction",ha="center",fontsize=9,
-               arrowprops=dict(arrowstyle="<-",color="#17392c"))
-    a.grid(color="#cbd9c6",lw=.6)
-    a.tick_params(bottom=False,left=False,labelbottom=False,labelleft=False)
-    for spine in a.spines.values():
-        spine.set_visible(False)
-    data = BytesIO()
-    f.savefig(data,format="png",bbox_inches="tight",dpi=145,pad_inches=.14)
-    plt.close(f)
-    return embed(data.getvalue())
-
-def portable_map(site):
     from math import cos, radians
     from PIL import Image, ImageDraw, ImageFont
 
@@ -106,12 +63,13 @@ def portable_map(site):
     image.save(buffer,format="PNG")
     return embed(buffer.getvalue())
 
-def climate_figure(output):
+def climate_figure(output, language="es"):
     chart = make_subplots(specs=[[{"secondary_y":True}]])
-    chart.add_trace(go.Bar(x=MONTHS,y=[m["rain"] for m in output["monthly"]],
-                           name="Lluvia (mm)",marker_color="#b0d9a0"))
-    chart.add_trace(go.Scatter(x=MONTHS,y=[m["temp"] for m in output["monthly"]],
-                               name="Temperatura (°C)",line=dict(color="#23624c",width=3),mode="lines+markers"),
+    months = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split() if language=="en" else MONTHS
+    chart.add_trace(go.Bar(x=months,y=[m["rain"] for m in output["monthly"]],
+                           name=translate("Lluvia (mm)",language),marker_color="#b0d9a0"))
+    chart.add_trace(go.Scatter(x=months,y=[m["temp"] for m in output["monthly"]],
+                               name=translate("Temperatura (°C)",language),line=dict(color="#23624c",width=3),mode="lines+markers"),
                     secondary_y=True)
     chart.update_yaxes(title_text="mm",secondary_y=False)
     chart.update_yaxes(title_text="°C",secondary_y=True)
@@ -120,11 +78,11 @@ def climate_figure(output):
         legend=dict(orientation="h",x=0,y=-.21))
     return embed(chart.to_image(format="png",width=chart.layout.width,height=chart.layout.height,scale=1.5))
 
-def alternatives_figure(output):
+def alternatives_figure(output, language="es"):
     records = output["alternatives"]
-    chart = make_subplots(rows=1,cols=2,subplot_titles=("Déficit medio · mm","Cobertura estimada · %"))
+    chart = make_subplots(rows=1,cols=2,subplot_titles=tuple(translate(s,language) for s in ("Déficit medio · mm","Cobertura estimada · %")))
     for col,metric,color in [(1,"deficit_mm","#3f765e"),(2,"cover_pct","#a6c880")]:
-        chart.add_trace(go.Bar(x=[f"Opción {i+1}" for i in range(len(records))],
+        chart.add_trace(go.Bar(x=[translate(f"Opción {i+1}",language) for i in range(len(records))],
             y=[r["metrics"]["historical"][metric] for r in records],marker_color=color),row=1,col=col)
     if all(r["metrics"]["historical"]["deficit_mm"] is None for r in records):
         chart.add_annotation(text="Datos pendientes",xref="x domain",yref="y domain",x=.5,y=.55,showarrow=False)
@@ -143,6 +101,9 @@ def render(item, lease, progress):
     folder.mkdir(parents=True,exist_ok=False)
     try:
         output = item["output"]
+        if "quality" not in output:
+            output = {**output,"quality":evidence_quality(output,item["inputs"],item["field_snapshot"],item["run_created"])}
+        language = item.get("language", "es")
         selected = next(r for r in output["alternatives"] if r["id"]==item["rotation_id"])
         with (folder/"metrics.csv").open("w",encoding="utf-8",newline="") as stream:
             out=csv.writer(stream)
@@ -182,9 +143,9 @@ def render(item, lease, progress):
         logo = embed(logo_path.read_bytes(),"image/svg+xml" if logo_path.suffix==".svg" else "image/png")
         env = Environment(loader=FileSystemLoader(Path(__file__).parent/"templates"),
                           autoescape=select_autoescape(["html"]))
-        html = env.get_template("report.html").render(item=item,output=output,selected=selected,logo=logo,
-            field=item["field_snapshot"], chart=climate_figure(output),comparison=alternatives_figure(output),
-            map_data=map_figure(item["field_snapshot"]),metrics=METRICS)
+        html = env.get_template("report.en.html" if language=="en" else "report.html").render(item=item,output=localize(output,language),selected=localize(selected,language),logo=logo,
+            field=localize(item["field_snapshot"],language), chart=climate_figure(output,language),comparison=alternatives_figure(output,language),
+            map_data=map_figure(item["field_snapshot"]),metrics={k:(translate(label,language),translate(unit,language)) for k,(label,unit) in METRICS.items()})
         progress(72)
         pdf = folder/"report.pdf"
         with sync_playwright() as pw:
@@ -195,7 +156,7 @@ def render(item, lease, progress):
                 page.evaluate("document.fonts.ready")
                 page.pdf(path=pdf, print_background=True,prefer_css_page_size=True,
                          display_header_footer=True,header_template="<span></span>",
-                         footer_template='<div style="font:9px Arial;width:100%;padding:0 15mm;color:#52685b;display:flex;justify-content:space-between"><span>SkyField · Planificación agrícola</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>')
+                         footer_template='<div style="font:9px Arial;width:100%;padding:0 15mm;color:#52685b;display:flex;justify-content:space-between"><span>SkyField · '+translate("Planificación agrícola",language)+'</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>')
         document = PdfReader(pdf)
         if len(document.pages)<2 or "SkyField" not in (document.pages[0].extract_text() or ""):
             raise JobError("El PDF generado no pasó la verificación de lectura.",True)
