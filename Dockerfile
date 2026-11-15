@@ -3,6 +3,7 @@ WORKDIR /frontend
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web/ ./
+COPY data/reference/ui.en.json /data/reference/ui.en.json
 RUN npm run build
 
 FROM ghcr.io/astral-sh/uv:0.8.17 AS uv
